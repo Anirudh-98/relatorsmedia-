@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PortalLayout } from "@/components/layout/PortalLayout";
@@ -16,6 +16,12 @@ import {
   FaArrowRight,
   FaLock,
   FaBuilding,
+  FaCamera,
+  FaImage,
+  FaSyncAlt,
+  FaTimes,
+  FaExclamationTriangle,
+  FaCheck,
 } from "react-icons/fa";
 
 export default function RegisterPage() {
@@ -38,10 +44,133 @@ export default function RegisterPage() {
     experienceYears: "5",
     specialization: "Residential Plots & Apartments",
     companyName: "Deshmukh Realty Associates",
+    photo: "/images/rohan_deshmukh.png",
     password: "",
     confirmPassword: "",
     agreeTerms: true,
   });
+
+  // Camera state with front/back camera switch
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Attach stream when camera is active
+  useEffect(() => {
+    if (isCameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isCameraActive]);
+
+  // Cleanup camera stream
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async (targetFacing?: "user" | "environment") => {
+    const actualFacing: "user" | "environment" =
+      targetFacing === "user" || targetFacing === "environment" ? targetFacing : facingMode;
+
+    setCameraError(null);
+    setIsSwitchingCamera(true);
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1080 },
+            height: { ideal: 1080 },
+            facingMode: { ideal: actualFacing },
+          },
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
+      streamRef.current = stream;
+      setFacingMode(actualFacing);
+      setIsCameraActive(true);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+    } catch (err) {
+      console.error("Camera access error:", err);
+      setCameraError(
+        "Camera access was denied or no camera device was detected. Please allow permissions or upload your photo from the gallery."
+      );
+      setIsCameraActive(true);
+    } finally {
+      setIsSwitchingCamera(false);
+    }
+  };
+
+  const toggleCamera = async () => {
+    const nextFacing = facingMode === "user" ? "environment" : "user";
+    await startCamera(nextFacing);
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+    setCameraError(null);
+    setIsSwitchingCamera(false);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 640;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      if (facingMode === "user") {
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+      setFormData((prev) => ({ ...prev, photo: dataUrl }));
+      stopCamera();
+    }
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          setFormData((prev) => ({ ...prev, photo: result }));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [registeredSuccess, setRegisteredSuccess] = useState(false);
@@ -75,7 +204,7 @@ export default function RegisterPage() {
     location: `${formData.city || "City"}, ${formData.state || "State"}`,
     issuedDate: "23 SEP 2026",
     validTill: "22 SEP 2028",
-    photo: "/images/rohan_deshmukh.png",
+    photo: formData.photo || "/images/rohan_deshmukh.png",
     verificationUrl: `https://realtorsmedia.com/verify/${
       selectedTier === "orange" ? "RM-A-2026" : selectedTier === "blue" ? "RM-B-2026" : "RM-C-2026"
     }`,
@@ -349,6 +478,60 @@ export default function RegisterPage() {
                 </div>
               </div>
 
+              {/* ID Card Photograph with Front/Back Camera */}
+              <div className="p-3 bg-[#F8FAFC] rounded border border-[#CBD5E1] space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10.5px] font-black uppercase text-[#073F73] flex items-center gap-1.5">
+                    <FaCamera className="text-[#0284C7]" />
+                    <span>Member ID Photograph *</span>
+                  </label>
+                  <span className="text-[9.5px] text-gray-500 font-semibold">Updates live on card preview</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => startCamera()}
+                    className="py-1.5 px-3 bg-[#073F73] hover:bg-[#06345F] text-white text-[11px] font-bold rounded-[3px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <FaCamera className="text-[10px]" />
+                    <span>Take Photo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="py-1.5 px-3 bg-white hover:bg-gray-50 border border-[#C9D7E3] text-[#143B5D] text-[11px] font-bold rounded-[3px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <FaImage className="text-[10px] text-[#073F73]" />
+                    <span>Upload Image</span>
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handlePhotoUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                </div>
+
+                {formData.photo && (
+                  <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
+                    <img
+                      src={formData.photo}
+                      alt="Selected photo"
+                      className="w-10 h-10 rounded-full object-cover border border-[#073F73]"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-[10px] font-bold text-emerald-700 flex items-center gap-1">
+                        <FaCheck className="text-[9px]" /> Photo set for ID card
+                      </span>
+                      <span className="text-[9px] text-gray-500">Live preview updated</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-[#143B5D] mb-1">Create Password *</label>
@@ -455,6 +638,104 @@ export default function RegisterPage() {
                   <span className="text-gray-500">Verification Engine:</span>
                   <span className="font-bold text-emerald-700">Instant QR Code Active</span>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Camera Capture Overlay with Front/Back Camera Switch */}
+      {isCameraActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-3">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-300">
+            <div className="bg-[#073F73] text-white px-4 py-3 flex items-center justify-between">
+              <span className="text-[13px] font-black uppercase tracking-wide flex items-center gap-2">
+                <FaCamera className="text-[#38BDF8]" />
+                <span>Take Photo for ID Card</span>
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleCamera}
+                  disabled={isSwitchingCamera}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded text-[11px] font-bold transition-all cursor-pointer border border-white/20 disabled:opacity-50"
+                  title={`Switch to ${facingMode === "user" ? "Back" : "Front"} Camera`}
+                >
+                  <FaSyncAlt className={`text-[10px] ${isSwitchingCamera ? "animate-spin" : ""}`} />
+                  <span>{facingMode === "user" ? "Back Camera" : "Front Camera"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="w-7 h-7 rounded bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <FaTimes className="text-[12px]" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 flex flex-col items-center">
+              {cameraError ? (
+                <div className="p-3 bg-red-50 border border-red-200 rounded text-[11px] text-red-700 text-center my-3">
+                  <p>{cameraError}</p>
+                </div>
+              ) : (
+                <div className="relative w-full aspect-square max-w-[280px] bg-black rounded-lg overflow-hidden border-2 border-[#073F73] shadow-inner mb-3">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 left-2 z-10 px-2 py-0.5 rounded-full bg-black/60 text-white text-[9px] font-bold border border-white/20">
+                    {facingMode === "user" ? "🤳 Front Camera" : "📷 Back Camera"}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={toggleCamera}
+                    disabled={isSwitchingCamera}
+                    className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/65 hover:bg-black/85 text-white text-[10px] font-bold border border-white/30 cursor-pointer"
+                  >
+                    <FaSyncAlt className={`text-[10px] text-[#38BDF8] ${isSwitchingCamera ? "animate-spin" : ""}`} />
+                    <span>{facingMode === "user" ? "Switch to Back" : "Switch to Front"}</span>
+                  </button>
+                  <div className="absolute inset-0 border-2 border-white/20 pointer-events-none flex items-center justify-center">
+                    <div className="w-44 h-52 border-2 border-dashed border-white/70 rounded-2xl pointer-events-none" />
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 w-full mt-1">
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="py-2 px-3 rounded border border-gray-300 text-gray-700 font-bold text-[11px] hover:bg-gray-100 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                {!cameraError && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={toggleCamera}
+                      disabled={isSwitchingCamera}
+                      className="py-2 px-2.5 rounded bg-[#EEF6FC] hover:bg-[#E0EFFB] text-[#073F73] font-bold text-[11px] flex items-center justify-center gap-1 border border-[#A5CEE8] cursor-pointer"
+                    >
+                      <FaSyncAlt className={`text-[10px] ${isSwitchingCamera ? "animate-spin" : ""}`} />
+                      <span>{facingMode === "user" ? "Back Camera" : "Front Camera"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={capturePhoto}
+                      className="flex-1 py-2 px-3 rounded bg-[#168A3A] hover:bg-[#126f2f] text-white font-black text-[11.5px] flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <FaCamera className="text-[11px]" />
+                      <span>Snap Photo</span>
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -109,6 +109,9 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   // Live Camera state
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const [isSwitchingCamera, setIsSwitchingCamera] = useState(false);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
@@ -189,22 +192,54 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     };
   }, []);
 
-  const startCamera = async () => {
+  const startCamera = async (targetFacing?: "user" | "environment") => {
+    const actualFacing: "user" | "environment" =
+      targetFacing === "user" || targetFacing === "environment" ? targetFacing : facingMode;
+
     setCameraError(null);
     setPhotoError(null);
+    setIsSwitchingCamera(true);
     try {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
       }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: "user" },
-        audio: false,
-      });
+
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1080 },
+            height: { ideal: 1080 },
+            facingMode: { ideal: actualFacing },
+          },
+          audio: false,
+        });
+      } catch {
+        // Fallback to basic video constraint if ideal constraints fail
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
       streamRef.current = stream;
+      setFacingMode(actualFacing);
       setIsCameraActive(true);
+
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.play().catch(() => {});
+      }
+
+      if (navigator.mediaDevices.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const videoDevs = devices.filter((d) => d.kind === "videoinput");
+          setAvailableCameras(videoDevs);
+        } catch {
+          // ignore
+        }
       }
     } catch (err) {
       console.error("Camera access error:", err);
@@ -212,7 +247,14 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         "Camera access was denied or no camera device was detected. Please allow camera permissions or upload your photo from the gallery."
       );
       setIsCameraActive(true);
+    } finally {
+      setIsSwitchingCamera(false);
     }
+  };
+
+  const toggleCamera = async () => {
+    const nextFacing = facingMode === "user" ? "environment" : "user";
+    await startCamera(nextFacing);
   };
 
   const stopCamera = () => {
@@ -222,6 +264,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     }
     setIsCameraActive(false);
     setCameraError(null);
+    setIsSwitchingCamera(false);
   };
 
   const capturePhoto = () => {
@@ -232,6 +275,11 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     canvas.height = video.videoHeight || 640;
     const ctx = canvas.getContext("2d");
     if (ctx) {
+      if (facingMode === "user") {
+        // Mirror horizontally so selfie picture matches what the user saw on screen
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1);
+      }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
       setFormData((prev) => ({ ...prev, photo: dataUrl }));
@@ -749,7 +797,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <button
                     type="button"
-                    onClick={startCamera}
+                    onClick={() => startCamera()}
                     className="px-3 py-2 bg-[#0284C7] hover:bg-[#0369A1] text-white text-[11px] font-black rounded-md shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <FaCamera className="text-[11px]" />
@@ -977,24 +1025,40 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       </div>
 
       {/* ========================================================
-          LIVE CAMERA CAPTURE OVERLAY
+          LIVE CAMERA CAPTURE OVERLAY WITH FRONT & BACK SWITCH
          ======================================================== */}
       {isCameraActive && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-xs p-3">
           <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-300">
+            {/* Camera Header */}
             <div className="bg-[#073F73] text-white px-4 py-3 flex items-center justify-between">
               <span className="text-[13px] font-black uppercase tracking-wide flex items-center gap-2">
                 <FaCamera className="text-[#38BDF8]" />
-                <span>Take Realtor Photo (Webcam)</span>
+                <span>Take Realtor Photo</span>
               </span>
-              <button
-                type="button"
-                onClick={stopCamera}
-                className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition-colors"
-                title="Cancel & close camera"
-              >
-                <FaTimes className="text-[12px]" />
-              </button>
+
+              <div className="flex items-center gap-2">
+                {/* Switch Camera in Header */}
+                <button
+                  type="button"
+                  onClick={toggleCamera}
+                  disabled={isSwitchingCamera}
+                  className="flex items-center gap-1.5 px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white rounded-md text-[11px] font-bold transition-all cursor-pointer border border-white/20 disabled:opacity-50"
+                  title={`Switch to ${facingMode === "user" ? "Back" : "Front"} Camera`}
+                >
+                  <FaSyncAlt className={`text-[10px] ${isSwitchingCamera ? "animate-spin" : ""}`} />
+                  <span>{facingMode === "user" ? "Back Camera" : "Front Camera"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition-colors"
+                  title="Cancel & close camera"
+                >
+                  <FaTimes className="text-[12px]" />
+                </button>
+              </div>
             </div>
 
             <div className="p-4 flex flex-col items-center">
@@ -1010,8 +1074,27 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     autoPlay
                     playsInline
                     muted
+                    style={{ transform: facingMode === "user" ? "scaleX(-1)" : "none" }}
                     className="w-full h-full object-cover"
                   />
+
+                  {/* Active Camera Indicator Badge */}
+                  <div className="absolute top-2.5 left-2.5 z-10 px-2 py-0.5 rounded-full bg-black/60 text-white text-[9.5px] font-bold backdrop-blur-sm border border-white/20 shadow-xs">
+                    {facingMode === "user" ? "🤳 Front Camera" : "📷 Back Camera"}
+                  </div>
+
+                  {/* Floating Flip Camera Quick Button */}
+                  <button
+                    type="button"
+                    onClick={toggleCamera}
+                    disabled={isSwitchingCamera}
+                    className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-black/65 hover:bg-black/85 text-white text-[10px] font-bold backdrop-blur-md border border-white/30 shadow-md transition-transform active:scale-95 cursor-pointer"
+                    title={`Switch to ${facingMode === "user" ? "Back" : "Front"} Camera`}
+                  >
+                    <FaSyncAlt className={`text-[10px] text-[#38BDF8] ${isSwitchingCamera ? "animate-spin" : ""}`} />
+                    <span>{facingMode === "user" ? "Switch to Back" : "Switch to Front"}</span>
+                  </button>
+
                   {/* Visual Portrait Frame Overlay */}
                   <div className="absolute inset-0 border-2 border-white/20 rounded-lg pointer-events-none flex items-center justify-center">
                     <div className="w-44 h-52 border-2 border-dashed border-white/70 rounded-2xl pointer-events-none shadow-xs" />
@@ -1024,23 +1107,38 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                 </div>
               )}
 
+              {/* Action Buttons: Cancel, Switch Camera, Snap Photo */}
               <div className="flex items-center gap-2 w-full mt-1">
                 <button
                   type="button"
                   onClick={stopCamera}
-                  className="flex-1 py-2 px-3 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-[11.5px] transition-colors cursor-pointer"
+                  className="py-2 px-3 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-[11.5px] transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
+
                 {!cameraError && (
-                  <button
-                    type="button"
-                    onClick={capturePhoto}
-                    className="flex-1 py-2 px-3 rounded-md bg-[#059669] hover:bg-[#047857] text-white font-black text-[11.5px] flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-                  >
-                    <FaCamera className="text-[11px]" />
-                    <span>Snap Photo</span>
-                  </button>
+                  <>
+                    <button
+                      type="button"
+                      onClick={toggleCamera}
+                      disabled={isSwitchingCamera}
+                      className="py-2 px-2.5 rounded-md bg-[#EEF6FC] hover:bg-[#E0EFFB] text-[#073F73] font-bold text-[11px] flex items-center justify-center gap-1.5 border border-[#A5CEE8] transition-colors cursor-pointer"
+                      title="Flip front / back camera"
+                    >
+                      <FaSyncAlt className={`text-[10px] ${isSwitchingCamera ? "animate-spin" : ""}`} />
+                      <span>{facingMode === "user" ? "Back Camera" : "Front Camera"}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={capturePhoto}
+                      className="flex-1 py-2 px-3 rounded-md bg-[#059669] hover:bg-[#047857] text-white font-black text-[11.5px] flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                    >
+                      <FaCamera className="text-[11px]" />
+                      <span>Snap Photo</span>
+                    </button>
+                  </>
                 )}
               </div>
             </div>
