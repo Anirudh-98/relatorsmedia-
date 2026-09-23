@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme {
+  --color-navy-primary: #073F73;
+  --color-navy-secondary: #0B4F8A;
+  --color-navy-dark: #06345F;
+  --color-blue-bright: #145A96;
+  --color-brand-red: #E21F2F;
+  --color-brand-bright-red: #F11D32;
+  --color-brand-yellow: #F7C900;
+  --color-brand-light-yellow: #FFF4B8;
+  --color-brand-green: #168A3A;
+  --color-brand-light-green: #E7F6EA;
+  --color-brand-purple: #6637A8;
+  --color-brand-light-purple: #F1E7FA;
+  --color-brand-light-blue: #EEF6FC;
+  --color-brand-border: #C9D7E3;
+  --color-brand-light-grey: #F4F7F9;
+  --color-brand-text-navy: #143B5D;
+  --color-brand-text-dark: #18324A;
+}
+
+:root {
+  --background: #F4F7F9;
+  --foreground: #18324A;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-inter), Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Script font utility for slogans */
+.font-script {
+  font-family: var(--font-script), 'Brush Script MT', cursive;
+}
+
+/* Card typography for ultra-clear badges and credentials */
+.font-card {
+  font-family: var(--font-card), var(--font-inter), system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.012em;
+}
+
+/* Custom compact scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Subtle animation for ticker */
+@keyframes ticker {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
+}
+
+.animate-ticker {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: ticker 30s linear infinite;
+}
+
+.animate-ticker:hover {
+  animation-play-state: paused;
+}
+
+/* Print optimization: ensure single-page ID card printing */
+@media print {
+  @page {
+    size: auto;
+    margin: 8mm;
+  }
+
+  html, body {
+    background: #FFFFFF !important;
+    overflow: visible !important;
+  }
+}

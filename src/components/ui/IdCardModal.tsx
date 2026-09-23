@@ -1,0 +1,1052 @@
+"use client";
+
+import React, { useState, useRef, useEffect } from "react";
+import { toPng } from "html-to-image";
+import Image from "next/image";
+import {
+  FaTimes,
+  FaDownload,
+  FaPrint,
+  FaCheck,
+  FaIdCard,
+  FaCamera,
+  FaImage,
+  FaUserCheck,
+  FaShieldAlt,
+  FaQrcode,
+  FaSyncAlt,
+  FaExclamationTriangle,
+  FaTrash,
+} from "react-icons/fa";
+import { RealtorsMediaIdCard } from "./RealtorsMediaIdCard";
+import { RealtorsMediaEmployee } from "@/types";
+import { realtorsEmployees, cardTierPlans } from "@/data/portalData";
+
+export interface IdCardModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  initialEmployee?: RealtorsMediaEmployee;
+  initialTier?: "green" | "blue" | "orange" | "red";
+}
+
+const EXPERIENCE_OPTIONS = [
+  "Fresher / < 1 Year",
+  "1 - 3 Years",
+  "3 - 5 Years",
+  "5 - 10 Years",
+  "10+ Years",
+  "15+ Years",
+];
+
+const SPECIALIZATION_OPTIONS = [
+  "Residential Properties",
+  "Commercial & Retail",
+  "Open Plots & Layouts",
+  "Villas & Luxury Homes",
+  "Farm Houses & Lands",
+  "Industrial & Warehousing",
+  "Property Sales & Channel Partner",
+];
+
+const PRESET_PHOTOS = [
+  { label: "Rohan D.", path: "/images/rohan_deshmukh.png" },
+  { label: "Ramnath K.", path: "/images/realtor_ramnath.jpg" },
+  { label: "Priya S.", path: "/images/realtor_priya.jpg" },
+];
+
+const TIER_PREFIX_MAP: Record<string, string> = {
+  green: "RM-C",
+  blue: "RM-B",
+  orange: "RM-A",
+  red: "RM-A",
+};
+
+let globalTierSequence: Record<string, number> = {
+  green: 1111,
+  blue: 1111,
+  orange: 1111,
+  red: 1111,
+};
+
+export const IdCardModal: React.FC<IdCardModalProps> = ({
+  isOpen,
+  onClose,
+  initialEmployee,
+  initialTier = "blue",
+}) => {
+  const [selectedTier, setSelectedTier] = useState<"green" | "blue" | "orange" | "red">(initialTier);
+  const [tierSequence, setTierSequence] = useState<Record<string, number>>(globalTierSequence);
+
+  const getPrefix = (tier: "green" | "blue" | "orange" | "red") =>
+    TIER_PREFIX_MAP[tier] || "RM-B";
+
+  // Form state
+  const [formData, setFormData] = useState({
+    name: initialEmployee?.name || "Rohan Deshmukh",
+    mobile: initialEmployee?.phone || "+91 98765 43210",
+    email: initialEmployee?.email || "rohan.d@realtorsmedia.com",
+    location: initialEmployee?.location || "Pune, Maharashtra",
+    agencyName: initialEmployee?.agencyName || "",
+    licenseNumber: initialEmployee?.licenseNumber || initialEmployee?.reraNumber || "",
+    experience: initialEmployee?.experience || "",
+    specialization: initialEmployee?.specialization || "",
+    photo: initialEmployee?.photo || "/images/rohan_deshmukh.png",
+    employeeId:
+      initialEmployee?.employeeId ||
+      `${TIER_PREFIX_MAP[initialTier] || "RM-B"}-${globalTierSequence[initialTier] || 1111}`,
+    issuedDate: initialEmployee?.issuedDate || "20 SEP 2026",
+    validTill: initialEmployee?.validTill || "19 SEP 2028",
+    designation: initialEmployee?.designation || "VERIFIED REALTOR",
+    department: initialEmployee?.department || "Property Sales & Channel",
+  });
+
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [isGenerated, setIsGenerated] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+
+  // Live Camera state
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cardContainerRef = useRef<HTMLDivElement>(null);
+
+  // Sync state when initial props change
+  useEffect(() => {
+    if (initialTier) {
+      setSelectedTier(initialTier);
+      const prefix = TIER_PREFIX_MAP[initialTier] || "RM-B";
+      const currentSeq = tierSequence[initialTier] || 1111;
+      setFormData((prev) => ({
+        ...prev,
+        employeeId: `${prefix}-${currentSeq}`,
+      }));
+    }
+  }, [initialTier]);
+
+  useEffect(() => {
+    if (initialEmployee) {
+      const activeTier = initialEmployee.theme || initialTier || "blue";
+      const prefix = TIER_PREFIX_MAP[activeTier] || "RM-B";
+      const fallbackId = `${prefix}-${tierSequence[activeTier] || 1111}`;
+      setFormData((prev) => ({
+        ...prev,
+        name: initialEmployee.name,
+        location: initialEmployee.location,
+        photo: initialEmployee.photo || prev.photo,
+        mobile: initialEmployee.phone || prev.mobile,
+        email: initialEmployee.email || prev.email,
+        employeeId: initialEmployee.employeeId || fallbackId,
+        agencyName: initialEmployee.agencyName || prev.agencyName,
+        licenseNumber: initialEmployee.licenseNumber || initialEmployee.reraNumber || prev.licenseNumber,
+        experience: initialEmployee.experience || prev.experience,
+        specialization: initialEmployee.specialization || prev.specialization,
+        designation: initialEmployee.designation || prev.designation,
+        department: initialEmployee.department || prev.department,
+      }));
+    }
+  }, [initialEmployee, initialTier]);
+
+  // Handle ESC key to close
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isOpen) {
+        if (isCameraActive) {
+          stopCamera();
+        } else {
+          onClose();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, isCameraActive, onClose]);
+
+  // Attach camera stream when camera view is active
+  useEffect(() => {
+    if (isCameraActive && videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [isCameraActive]);
+
+  // Cleanup camera stream when closing modal or unmounting
+  useEffect(() => {
+    if (!isOpen && isCameraActive) {
+      stopCamera();
+    }
+  }, [isOpen, isCameraActive]);
+
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+  const startCamera = async () => {
+    setCameraError(null);
+    setPhotoError(null);
+    try {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 640 }, facingMode: "user" },
+        audio: false,
+      });
+      streamRef.current = stream;
+      setIsCameraActive(true);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
+    } catch (err) {
+      console.error("Camera access error:", err);
+      setCameraError(
+        "Camera access was denied or no camera device was detected. Please allow camera permissions or upload your photo from the gallery."
+      );
+      setIsCameraActive(true);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+    setCameraError(null);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 640;
+    const ctx = canvas.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+      setFormData((prev) => ({ ...prev, photo: dataUrl }));
+      setPhotoError(null);
+      stopCamera();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  // Generate unique Member ID sequentially based on tier (RM-C-1111, RM-B-1111, RM-A-1111)
+  const handleRegenerateId = (tier: "green" | "blue" | "orange" | "red") => {
+    const prefix = getPrefix(tier);
+    const nextSeq = (tierSequence[tier] || 1111) + 1;
+    setTierSequence((prev) => {
+      const updated = { ...prev, [tier]: nextSeq };
+      globalTierSequence = updated;
+      return updated;
+    });
+    setFormData((prev) => ({ ...prev, employeeId: `${prefix}-${nextSeq}` }));
+  };
+
+  // Change tier and update sequential ID format
+  const handleTierChange = (tier: "green" | "blue" | "orange" | "red") => {
+    setSelectedTier(tier);
+    const prefix = getPrefix(tier);
+    const currentSeq = tierSequence[tier] || 1111;
+    setFormData((prev) => ({
+      ...prev,
+      employeeId: `${prefix}-${currentSeq}`,
+    }));
+  };
+
+  // Handle local image file upload
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        alert("Image file size should be less than 5MB");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          setFormData((prev) => ({ ...prev, photo: result }));
+          setPhotoError(null);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Generate ID Card submit trigger
+  const handleGenerateCard = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.photo) {
+      setPhotoError("⚠ Without a photo you will not get an ID card. Please take a photo or upload one from your gallery.");
+      return;
+    }
+    setPhotoError(null);
+    setIsGenerated(true);
+    setTimeout(() => setIsGenerated(false), 3500);
+  };
+
+  // High-Resolution CR80 PNG Download (Exact ID Card Print Size - No A4 margins)
+  const handleDownloadPng = async () => {
+    if (!formData.photo) {
+      setPhotoError("⚠ Without a photo you will not get an ID card. Please take a photo or upload one from your gallery.");
+      return;
+    }
+    setPhotoError(null);
+
+    try {
+      setIsDownloading(true);
+      const cardElement = document.getElementById("modal-realtors-id-card");
+      if (!cardElement) return;
+
+      const dataUrl = await toPng(cardElement, {
+        quality: 1,
+        pixelRatio: 3, // 300 DPI for crisp physical printing (1914 x 3033px)
+        width: 638,
+        height: 1011,
+        style: {
+          transform: "none",
+          transformOrigin: "top left",
+          position: "relative",
+          left: "0",
+          top: "0",
+          borderRadius: "36px",
+          clipPath: "inset(0 round 36px)",
+          boxShadow: "none",
+        },
+      });
+
+      const link = document.createElement("a");
+      link.download = `realtors_media_id_${formData.employeeId}.png`;
+      link.href = dataUrl;
+      link.click();
+
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 3000);
+    } catch (err) {
+      console.error("Error generating ID card image:", err);
+      alert("Failed to export ID Card. Please try again.");
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
+  const handlePrint = async () => {
+    if (!formData.photo) {
+      setPhotoError("⚠ Without a photo you will not get an ID card. Please take a photo or upload one from your gallery.");
+      return;
+    }
+    setPhotoError(null);
+
+    try {
+      setIsPrinting(true);
+      const cardElement = document.getElementById("modal-realtors-id-card");
+      if (!cardElement) {
+        window.print();
+        return;
+      }
+
+      const dataUrl = await toPng(cardElement, {
+        quality: 1,
+        pixelRatio: 3,
+        width: 638,
+        height: 1011,
+        style: {
+          transform: "none",
+          transformOrigin: "top left",
+          position: "relative",
+          left: "0",
+          top: "0",
+          borderRadius: "36px",
+          clipPath: "inset(0 round 36px)",
+          boxShadow: "none",
+        },
+      });
+
+      const printIframe = document.createElement("iframe");
+      printIframe.style.position = "fixed";
+      printIframe.style.right = "0";
+      printIframe.style.bottom = "0";
+      printIframe.style.width = "0";
+      printIframe.style.height = "0";
+      printIframe.style.border = "none";
+      document.body.appendChild(printIframe);
+
+      const iframeDoc = printIframe.contentWindow?.document;
+      if (!iframeDoc) {
+        window.print();
+        return;
+      }
+
+      iframeDoc.open();
+      iframeDoc.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Print ID Card - ${formData.employeeId}</title>
+            <style>
+              @page {
+                size: portrait;
+                margin: 0;
+              }
+              html, body {
+                margin: 0;
+                padding: 0;
+                width: 100%;
+                height: 100%;
+                background: #FFFFFF;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                overflow: hidden;
+              }
+              .print-container {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                page-break-inside: avoid;
+                break-inside: avoid;
+                margin: auto;
+              }
+              img {
+                width: 638px;
+                max-width: 92vw;
+                height: auto;
+                max-height: 96vh;
+                aspect-ratio: 638 / 1011;
+                display: block;
+                margin: auto;
+                border-radius: 36px;
+                box-shadow: none;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="print-container">
+              <img src="${dataUrl}" alt="Realtors Media ID Card" />
+            </div>
+            <script>
+              window.onload = function() {
+                setTimeout(function() {
+                  window.focus();
+                  window.print();
+                  setTimeout(function() {
+                    try {
+                      window.parent.document.body.removeChild(window.frameElement);
+                    } catch(e) {}
+                  }, 1200);
+                }, 300);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      iframeDoc.close();
+    } catch (err) {
+      console.error("Print error:", err);
+      window.print();
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  // Construct active employee object for live card render
+  const previewEmployee: RealtorsMediaEmployee = {
+    name: formData.name || "Realtor Name",
+    designation: formData.agencyName
+      ? formData.agencyName
+      : formData.specialization
+      ? formData.specialization
+      : formData.designation || "VERIFIED REALTOR",
+    employeeId: formData.employeeId,
+    department: formData.specialization || formData.department || "Property Sales & Channel",
+    location: formData.location || "City, State",
+    issuedDate: formData.issuedDate,
+    validTill: formData.validTill,
+    photo: formData.photo,
+    verificationUrl: `https://realtorsmedia.com/verify/${formData.employeeId}`,
+    theme: selectedTier,
+    phone: formData.mobile,
+    email: formData.email,
+    reraNumber: formData.licenseNumber,
+    agencyName: formData.agencyName,
+    specialization: formData.specialization,
+    experience: formData.experience,
+    licenseNumber: formData.licenseNumber,
+  };
+
+  const activePlan =
+    cardTierPlans.find((p) => p.tierTheme === selectedTier) || cardTierPlans[1];
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#071E36]/80 backdrop-blur-sm p-2 sm:p-4 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          if (isCameraActive) stopCamera();
+          else onClose();
+        }
+      }}
+    >
+      <div className="relative w-full max-w-5xl bg-white rounded-xl shadow-2xl border border-[#CBD5E1] overflow-hidden flex flex-col my-auto max-h-[96vh]">
+        {/* ========================================================
+            MODAL HEADER
+           ======================================================== */}
+        <div className="bg-[#073F73] px-4 py-2.5 sm:py-3 flex items-center justify-between text-white border-b border-[#0B4F8A]">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#38BDF8]/20 border border-[#38BDF8]/40 flex items-center justify-center text-[#38BDF8]">
+              <FaIdCard className="text-[17px]" />
+            </div>
+            <div>
+              <h2 className="text-[14px] sm:text-[16px] font-black uppercase tracking-wide flex items-center gap-2">
+                <span>Verified Realtor ID Card Generator</span>
+              </h2>
+              <p className="text-[10.5px] sm:text-[11.5px] text-[#BAE6FD] font-medium leading-tight">
+                Select your card tier, enter your details, and instantly generate your personalized ID Card
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (isCameraActive) stopCamera();
+              onClose();
+            }}
+            aria-label="Close modal"
+            className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+          >
+            <FaTimes className="text-[14px]" />
+          </button>
+        </div>
+
+        {/* ========================================================
+            TIER SELECTOR STRIP WITH PRICES
+           ======================================================== */}
+        <div className="bg-[#F8FAFC] px-3 sm:px-5 py-2 border-b border-[#E2E8F0] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+            <span className="text-[10px] font-black uppercase text-[#475569] mr-1 whitespace-nowrap">
+              Selected Tier:
+            </span>
+            {cardTierPlans.map((plan) => {
+              const isSelected = selectedTier === plan.tierTheme;
+              const isGreen = plan.tierTheme === "green";
+              const isBlue = plan.tierTheme === "blue";
+
+              return (
+                <button
+                  key={plan.id}
+                  type="button"
+                  onClick={() => handleTierChange(plan.tierTheme)}
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-black flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border ${
+                    isSelected
+                      ? isGreen
+                        ? "bg-[#059669] text-white border-[#047857] shadow-sm"
+                        : isBlue
+                        ? "bg-[#0284C7] text-white border-[#0369A1] shadow-sm"
+                        : "bg-[#EA580C] text-white border-[#C2410C] shadow-sm"
+                      : "bg-white text-[#334155] border-[#CBD5E1] hover:bg-gray-50"
+                  }`}
+                >
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isSelected ? "bg-white" : isGreen ? "bg-[#059669]" : isBlue ? "bg-[#0284C7]" : "bg-[#EA580C]"
+                    }`}
+                  />
+                  <span>{plan.title}</span>
+                  <span
+                    className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                      isSelected
+                        ? "bg-white/20 text-white"
+                        : "bg-[#F1F5F9] text-[#0F172A] border border-[#CBD5E1]"
+                    }`}
+                  >
+                    {plan.price}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="text-[11px] font-extrabold text-[#0369A1] flex items-center gap-1 self-end sm:self-auto">
+            <FaShieldAlt className="text-[#0284C7]" />
+            <span>Commission: {activePlan.commission}</span>
+          </div>
+        </div>
+
+        {/* ========================================================
+            MODAL BODY: 2-COLUMN DUAL PANE LAYOUT
+           ======================================================== */}
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5 grid grid-cols-1 lg:grid-cols-12 gap-5 bg-[#F1F5F9]">
+          {/* LEFT COLUMN: FORM DETAILS (7 Cols on LG) */}
+          <div className="lg:col-span-7 bg-white rounded-lg border border-[#CBD5E1] p-3 sm:p-4.5 shadow-xs flex flex-col space-y-4">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-2">
+              <h3 className="text-[13px] font-black uppercase text-[#073F73] tracking-wide flex items-center gap-1.5">
+                <FaUserCheck className="text-[#0284C7]" />
+                <span>Enter Realtor / Member Details</span>
+              </h3>
+              <span className="text-[10px] text-[#64748B] font-bold">
+                Updates Live on Preview →
+              </span>
+            </div>
+
+            <form onSubmit={handleGenerateCard} className="space-y-3">
+              {/* Full Name */}
+              <div>
+                <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                  Full Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Name"
+                  className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
+                />
+              </div>
+
+              {/* Mobile No. & Email ID */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                    Mobile No. <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={formData.mobile}
+                    onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                    placeholder="+91 00000 00000"
+                    className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                    Email ID <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    placeholder="you@example.com"
+                    className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
+                  />
+                </div>
+              </div>
+
+              {/* Area / Location & Agency Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                    Area / Location <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.location}
+                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    placeholder="Area or locality"
+                    className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                    Agency Name
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.agencyName}
+                    onChange={(e) => setFormData({ ...formData, agencyName: e.target.value })}
+                    placeholder="Agency or firm name (optional)"
+                    className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
+                  />
+                </div>
+              </div>
+
+              {/* License No. & Experience */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                    License No.
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.licenseNumber}
+                    onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
+                    placeholder="RERA / License number (optional)"
+                    className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-[#FAFBFD]"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                    Experience
+                  </label>
+                  <select
+                    value={formData.experience}
+                    onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
+                    className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-[#FAFBFD] cursor-pointer"
+                  >
+                    <option value="">Select</option>
+                    {EXPERIENCE_OPTIONS.map((exp) => (
+                      <option key={exp} value={exp}>
+                        {exp}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Specialization */}
+              <div>
+                <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                  Specialization
+                </label>
+                <select
+                  value={formData.specialization}
+                  onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                  className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-[#FAFBFD] cursor-pointer"
+                >
+                  <option value="">Select</option>
+                  {SPECIALIZATION_OPTIONS.map((spec) => (
+                    <option key={spec} value={spec}>
+                      {spec}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Photo Section */}
+              <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10.5px] font-black uppercase text-[#334155] flex items-center gap-1.5">
+                    <FaCamera className="text-[#0284C7]" />
+                    <span>Photo <span className="text-red-500">*</span></span>
+                  </span>
+                  <span className="text-[9px] font-medium text-[#64748B]">
+                    Max 5MB (PNG/JPG)
+                  </span>
+                </div>
+
+                {/* Photo Action Buttons: Take Photo & Upload from Gallery */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    className="px-3 py-2 bg-[#0284C7] hover:bg-[#0369A1] text-white text-[11px] font-black rounded-md shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <FaCamera className="text-[11px]" />
+                    <span>Take Photo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3 py-2 bg-white hover:bg-[#F0F9FF] border border-[#CBD5E1] text-[#073F73] text-[11px] font-black rounded-md shadow-2xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <FaImage className="text-[12px] text-[#0284C7]" />
+                    <span>Upload from Gallery</span>
+                  </button>
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handlePhotoUpload}
+                    accept="image/*"
+                    className="hidden"
+                  />
+                </div>
+
+                {/* Photo Preview Thumbnail & Status */}
+                {formData.photo && (
+                  <div className="flex items-center gap-3 pt-1 border-t border-[#E2E8F0]">
+                    <div className="relative w-12 h-12 rounded-lg overflow-hidden border-2 border-[#0284C7] bg-white shadow-xs flex-shrink-0">
+                      <Image
+                        src={formData.photo}
+                        alt="Profile preview"
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[10.5px] font-black text-[#065F46] flex items-center gap-1">
+                        <FaCheck className="text-[9.5px]" /> Photo Attached
+                      </span>
+                      <span className="text-[9px] text-[#64748B]">
+                        Live on card preview
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      {/* Presets */}
+                      {PRESET_PHOTOS.map((preset) => (
+                        <button
+                          key={preset.label}
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, photo: preset.path }))}
+                          className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold border transition-colors cursor-pointer ${
+                            formData.photo === preset.path
+                              ? "bg-[#073F73] text-white border-[#073F73]"
+                              : "bg-white text-[#475569] border-[#CBD5E1] hover:bg-gray-100"
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      ))}
+
+                      <button
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, photo: "" }))}
+                        className="text-[9.5px] font-bold text-red-600 hover:text-red-700 flex items-center gap-1 cursor-pointer bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200 ml-1"
+                        title="Remove photo"
+                      >
+                        <FaTrash className="text-[8.5px]" /> Remove
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Mandatory Warning Note */}
+                <div className="p-2 bg-[#FFFBEB] border border-[#FDE68A] rounded-md flex items-center gap-2 text-[#92400E]">
+                  <FaExclamationTriangle className="text-[12px] text-[#D97706] flex-shrink-0" />
+                  <span className="text-[10.5px] font-bold leading-tight">
+                    ⚠ Without a photo you will not get an ID card.
+                  </span>
+                </div>
+
+                {photoError && (
+                  <div className="p-2 bg-red-50 border border-red-200 rounded-md text-[10.5px] font-bold text-red-700 flex items-center gap-1.5">
+                    <FaExclamationTriangle className="text-red-500 flex-shrink-0" />
+                    <span>{photoError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* ID & Verification Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[10px] font-black uppercase text-[#475569]">
+                      Member ID (Auto-Generated)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleRegenerateId(selectedTier)}
+                      className="text-[9px] font-extrabold text-[#0284C7] hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <FaSyncAlt className="text-[8px]" />
+                      <span>Regenerate</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    readOnly
+                    value={formData.employeeId}
+                    className="w-full px-2.5 py-1.5 text-[11.5px] font-mono font-bold text-[#073F73] bg-[#EEF6FC] border border-[#BFDBFE] rounded-md cursor-not-allowed"
+                  />
+                </div>
+
+                <div className="flex flex-col justify-end">
+                  <span className="text-[9.5px] text-[#64748B] font-medium leading-tight">
+                    Unique Member ID linked to your chosen card tier & verification QR code.
+                  </span>
+                </div>
+              </div>
+
+              {/* Confirmation / Submit Button */}
+              <div className="pt-2">
+                <button
+                  type="submit"
+                  className="w-full py-2.5 px-3 rounded-md bg-[#073F73] hover:bg-[#052E54] text-white text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                >
+                  <span>Update & Generate Verified ID Card</span>
+                </button>
+              </div>
+
+              {isGenerated && (
+                <div className="p-2 bg-[#ECFDF5] border border-[#A7F3D0] rounded-md text-[11px] font-black text-[#065F46] flex items-center justify-center gap-1.5 animate-fade-in">
+                  <FaCheck className="text-[#059669]" />
+                  <span>ID Card successfully updated! You can now Download or Print your card.</span>
+                </div>
+              )}
+            </form>
+          </div>
+
+          {/* RIGHT COLUMN: LIVE CARD PREVIEW & EXPORT (5 Cols on LG) */}
+          <div className="lg:col-span-5 flex flex-col items-center justify-start space-y-3">
+            <div className="w-full bg-white rounded-lg border border-[#CBD5E1] p-3 sm:p-4 shadow-xs flex flex-col items-center">
+              {/* Preview Header */}
+              <div className="w-full flex items-center justify-between border-b border-[#E2E8F0] pb-2 mb-3">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      selectedTier === "green"
+                        ? "bg-[#059669]"
+                        : selectedTier === "blue"
+                        ? "bg-[#0284C7]"
+                        : "bg-[#EA580C]"
+                    }`}
+                  />
+                  <span className="text-[11.5px] font-black uppercase text-[#0F172A]">
+                    Live CR80 Card Preview
+                  </span>
+                </div>
+                <span className="text-[9.5px] font-bold text-[#0369A1] bg-[#E0F2FE] px-2 py-0.5 rounded-full">
+                  {activePlan.price} Tier
+                </span>
+              </div>
+
+              {/* Physical Card Container */}
+              <div
+                ref={cardContainerRef}
+                className="w-full max-w-[280px] sm:max-w-[310px] drop-shadow-xl"
+              >
+                <RealtorsMediaIdCard
+                  id="modal-realtors-id-card"
+                  employee={previewEmployee}
+                  theme={selectedTier}
+                />
+              </div>
+
+              {/* QR Verification details pill */}
+              <div className="w-full mt-3 p-2 bg-[#F8FAFC] rounded-md border border-[#E2E8F0] flex items-center justify-between text-[9.5px]">
+                <div className="flex items-center gap-1.5 text-[#334155] font-bold">
+                  <FaQrcode className="text-[#0284C7] text-[12px]" />
+                  <span>QR Verifies:</span>
+                </div>
+                <span className="font-mono text-[#073F73] font-extrabold truncate max-w-[150px]">
+                  {previewEmployee.employeeId}
+                </span>
+              </div>
+
+              {/* Download & Print Action Buttons */}
+              <div className="w-full grid grid-cols-2 gap-2 mt-3">
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  disabled={isPrinting}
+                  className="w-full py-2 px-2 rounded-md border border-[#073F73] text-[#073F73] hover:bg-[#EEF6FC] font-extrabold text-[11.5px] flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  <FaPrint className="text-[12px]" />
+                  <span>{isPrinting ? "Preparing..." : "Print Card"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadPng}
+                  disabled={isDownloading}
+                  className="w-full py-2 px-2 rounded-md bg-[#073F73] hover:bg-[#06335C] text-white font-black text-[11.5px] flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {downloadSuccess ? (
+                    <>
+                      <FaCheck className="text-[12px] text-[#4ADE80]" />
+                      <span>Card Saved!</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaDownload className="text-[12px]" />
+                      <span>{isDownloading ? "Rendering..." : "Download PNG"}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* CR80 Specs Badge */}
+            <div className="w-full text-center text-[10px] text-[#64748B] font-medium">
+              CR80 Card Standard: 54mm × 85.6mm • 300 DPI Export Ready
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================
+          LIVE CAMERA CAPTURE OVERLAY
+         ======================================================== */}
+      {isCameraActive && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-xs p-3">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full overflow-hidden border border-slate-300">
+            <div className="bg-[#073F73] text-white px-4 py-3 flex items-center justify-between">
+              <span className="text-[13px] font-black uppercase tracking-wide flex items-center gap-2">
+                <FaCamera className="text-[#38BDF8]" />
+                <span>Take Realtor Photo (Webcam)</span>
+              </span>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition-colors"
+                title="Cancel & close camera"
+              >
+                <FaTimes className="text-[12px]" />
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-col items-center">
+              {cameraError ? (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-[11px] text-red-700 font-semibold text-center my-4">
+                  <FaExclamationTriangle className="text-red-500 mx-auto text-[20px] mb-2" />
+                  <p>{cameraError}</p>
+                </div>
+              ) : (
+                <div className="relative w-full aspect-square max-w-[280px] bg-black rounded-lg overflow-hidden border-2 border-[#0284C7] shadow-inner mb-3">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  {/* Visual Portrait Frame Overlay */}
+                  <div className="absolute inset-0 border-2 border-white/20 rounded-lg pointer-events-none flex items-center justify-center">
+                    <div className="w-44 h-52 border-2 border-dashed border-white/70 rounded-2xl pointer-events-none shadow-xs" />
+                  </div>
+                  <div className="absolute bottom-2 inset-x-0 text-center">
+                    <span className="text-[10px] bg-black/60 text-white px-2 py-0.5 rounded-full font-medium">
+                      Align your face within the frame
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 w-full mt-1">
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="flex-1 py-2 px-3 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-100 font-bold text-[11.5px] transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                {!cameraError && (
+                  <button
+                    type="button"
+                    onClick={capturePhoto}
+                    className="flex-1 py-2 px-3 rounded-md bg-[#059669] hover:bg-[#047857] text-white font-black text-[11.5px] flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+                  >
+                    <FaCamera className="text-[11px]" />
+                    <span>Snap Photo</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
