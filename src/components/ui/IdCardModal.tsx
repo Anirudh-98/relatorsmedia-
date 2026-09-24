@@ -3,6 +3,8 @@
 import React, { useState, useRef, useEffect } from "react";
 import { toPng } from "html-to-image";
 import Image from "next/image";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   FaTimes,
   FaDownload,
@@ -17,10 +19,18 @@ import {
   FaSyncAlt,
   FaExclamationTriangle,
   FaTrash,
+  FaLock,
+  FaEye,
+  FaEyeSlash,
+  FaSpinner,
+  FaArrowRight,
 } from "react-icons/fa";
 import { RealtorsMediaIdCard } from "./RealtorsMediaIdCard";
 import { RealtorsMediaEmployee } from "@/types";
 import { realtorsEmployees, cardTierPlans } from "@/data/portalData";
+import { useAuth } from "@/context/AuthContext";
+import { registerMember } from "@/lib/firebase/auth";
+import { getNextEmployeeId, peekNextEmployeeId, saveMemberProfile } from "@/lib/firebase/db";
 
 export interface IdCardModalProps {
   isOpen: boolean;
@@ -61,44 +71,43 @@ const TIER_PREFIX_MAP: Record<string, string> = {
   red: "RM-A",
 };
 
-let globalTierSequence: Record<string, number> = {
-  green: 1111,
-  blue: 1111,
-  orange: 1111,
-  red: 1111,
-};
-
 export const IdCardModal: React.FC<IdCardModalProps> = ({
   isOpen,
   onClose,
   initialEmployee,
   initialTier = "blue",
 }) => {
+  const router = useRouter();
+  const { user, memberProfile, refreshProfile } = useAuth();
   const [selectedTier, setSelectedTier] = useState<"green" | "blue" | "orange" | "red">(initialTier);
-  const [tierSequence, setTierSequence] = useState<Record<string, number>>(globalTierSequence);
 
   const getPrefix = (tier: "green" | "blue" | "orange" | "red") =>
     TIER_PREFIX_MAP[tier] || "RM-B";
 
-  // Form state
+  // Form state including Create & Confirm Password
   const [formData, setFormData] = useState({
-    name: initialEmployee?.name || "Rohan Deshmukh",
-    mobile: initialEmployee?.phone || "+91 98765 43210",
-    email: initialEmployee?.email || "rohan.d@realtorsmedia.com",
-    location: initialEmployee?.location || "Pune, Maharashtra",
-    agencyName: initialEmployee?.agencyName || "",
-    licenseNumber: initialEmployee?.licenseNumber || initialEmployee?.reraNumber || "",
-    experience: initialEmployee?.experience || "",
-    specialization: initialEmployee?.specialization || "",
-    photo: initialEmployee?.photo || "/images/rohan_deshmukh.png",
-    employeeId:
-      initialEmployee?.employeeId ||
-      `${TIER_PREFIX_MAP[initialTier] || "RM-B"}-${globalTierSequence[initialTier] || 1111}`,
-    issuedDate: initialEmployee?.issuedDate || "20 SEP 2026",
-    validTill: initialEmployee?.validTill || "19 SEP 2028",
-    designation: initialEmployee?.designation || "VERIFIED REALTOR",
-    department: initialEmployee?.department || "Property Sales & Channel",
+    name: initialEmployee?.name || memberProfile?.fullName || "Rohan Deshmukh",
+    mobile: initialEmployee?.phone || memberProfile?.phone || "+91 98765 43210",
+    email: initialEmployee?.email || memberProfile?.email || user?.email || "rohan.d@realtorsmedia.com",
+    location: initialEmployee?.location || (memberProfile ? `${memberProfile.city}, ${memberProfile.state}` : "Pune, Maharashtra"),
+    agencyName: initialEmployee?.agencyName || memberProfile?.companyName || "",
+    licenseNumber: initialEmployee?.licenseNumber || initialEmployee?.reraNumber || memberProfile?.reraNo || "",
+    experience: initialEmployee?.experience || memberProfile?.experienceYears || "",
+    specialization: initialEmployee?.specialization || memberProfile?.specialization || "",
+    photo: initialEmployee?.photo || memberProfile?.photoUrl || user?.photoURL || "/images/rohan_deshmukh.png",
+    employeeId: initialEmployee?.employeeId || memberProfile?.employeeId || `${TIER_PREFIX_MAP[initialTier] || "RM-B"}-1111`,
+    issuedDate: initialEmployee?.issuedDate || memberProfile?.issuedDate || "24 SEP 2026",
+    validTill: initialEmployee?.validTill || memberProfile?.validTill || "23 SEP 2028",
+    designation: initialEmployee?.designation || memberProfile?.designation || "VERIFIED REALTOR",
+    department: initialEmployee?.department || memberProfile?.department || "Property Sales & Channel",
+    password: "",
+    confirmPassword: "",
   });
+
+  const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [authSuccessMessage, setAuthSuccessMessage] = useState<string | null>(null);
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -118,24 +127,23 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cardContainerRef = useRef<HTMLDivElement>(null);
 
-  // Sync state when initial props change
+  // Sync state when initial props change or modal opens
   useEffect(() => {
     if (initialTier) {
       setSelectedTier(initialTier);
-      const prefix = TIER_PREFIX_MAP[initialTier] || "RM-B";
-      const currentSeq = tierSequence[initialTier] || 1111;
-      setFormData((prev) => ({
-        ...prev,
-        employeeId: `${prefix}-${currentSeq}`,
-      }));
     }
   }, [initialTier]);
 
   useEffect(() => {
+    if (isOpen && !initialEmployee?.employeeId) {
+      peekNextEmployeeId(selectedTier).then((seqId) => {
+        setFormData((prev) => ({ ...prev, employeeId: seqId }));
+      });
+    }
+  }, [isOpen, selectedTier, initialEmployee]);
+
+  useEffect(() => {
     if (initialEmployee) {
-      const activeTier = initialEmployee.theme || initialTier || "blue";
-      const prefix = TIER_PREFIX_MAP[activeTier] || "RM-B";
-      const fallbackId = `${prefix}-${tierSequence[activeTier] || 1111}`;
       setFormData((prev) => ({
         ...prev,
         name: initialEmployee.name,
@@ -143,7 +151,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         photo: initialEmployee.photo || prev.photo,
         mobile: initialEmployee.phone || prev.mobile,
         email: initialEmployee.email || prev.email,
-        employeeId: initialEmployee.employeeId || fallbackId,
+        employeeId: initialEmployee.employeeId || prev.employeeId,
         agencyName: initialEmployee.agencyName || prev.agencyName,
         licenseNumber: initialEmployee.licenseNumber || initialEmployee.reraNumber || prev.licenseNumber,
         experience: initialEmployee.experience || prev.experience,
@@ -152,7 +160,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         department: initialEmployee.department || prev.department,
       }));
     }
-  }, [initialEmployee, initialTier]);
+  }, [initialEmployee]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -290,27 +298,27 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Generate unique Member ID sequentially based on tier (RM-C-1111, RM-B-1111, RM-A-1111)
-  const handleRegenerateId = (tier: "green" | "blue" | "orange" | "red") => {
-    const prefix = getPrefix(tier);
-    const nextSeq = (tierSequence[tier] || 1111) + 1;
-    setTierSequence((prev) => {
-      const updated = { ...prev, [tier]: nextSeq };
-      globalTierSequence = updated;
-      return updated;
-    });
-    setFormData((prev) => ({ ...prev, employeeId: `${prefix}-${nextSeq}` }));
+  // Generate unique Member ID sequentially based on tier (RM-C-1111, RM-B-1111, RM-A-1111...)
+  const handleRegenerateId = async (tier: "green" | "blue" | "orange" | "red") => {
+    try {
+      const seqId = await peekNextEmployeeId(tier);
+      setFormData((prev) => ({ ...prev, employeeId: seqId }));
+    } catch {
+      const prefix = getPrefix(tier);
+      setFormData((prev) => ({ ...prev, employeeId: `${prefix}-1111` }));
+    }
   };
 
   // Change tier and update sequential ID format
-  const handleTierChange = (tier: "green" | "blue" | "orange" | "red") => {
+  const handleTierChange = async (tier: "green" | "blue" | "orange" | "red") => {
     setSelectedTier(tier);
-    const prefix = getPrefix(tier);
-    const currentSeq = tierSequence[tier] || 1111;
-    setFormData((prev) => ({
-      ...prev,
-      employeeId: `${prefix}-${currentSeq}`,
-    }));
+    try {
+      const seqId = await peekNextEmployeeId(tier);
+      setFormData((prev) => ({ ...prev, employeeId: seqId }));
+    } catch {
+      const prefix = getPrefix(tier);
+      setFormData((prev) => ({ ...prev, employeeId: `${prefix}-1111` }));
+    }
   };
 
   // Handle local image file upload
@@ -333,16 +341,130 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     }
   };
 
-  // Generate ID Card submit trigger
-  const handleGenerateCard = (e: React.FormEvent) => {
+  // Generate ID Card & Create Member Login in Firebase
+  const handleGenerateCard = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPhotoError(null);
+    setAuthError(null);
+    setAuthSuccessMessage(null);
+
     if (!formData.photo) {
       setPhotoError("⚠ Without a photo you will not get an ID card. Please take a photo or upload one from your gallery.");
       return;
     }
-    setPhotoError(null);
-    setIsGenerated(true);
-    setTimeout(() => setIsGenerated(false), 3500);
+
+    if (!user) {
+      if (!formData.password) {
+        setAuthError("Please enter Create Password to activate your member login.");
+        return;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        setAuthError("Passwords do not match. Please re-enter your password.");
+        return;
+      }
+      if (formData.password.length < 6) {
+        setAuthError("Password must be at least 6 characters long.");
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      // Increment sequential counter atomically: 1111 -> 1112 -> 1113...
+      const nextSequentialId = await getNextEmployeeId(selectedTier);
+
+      if (!user) {
+        // Create user in Firebase Auth and Firestore with the sequential Member ID
+        const { profile } = await registerMember({
+          email: formData.email,
+          password: formData.password,
+          fullName: formData.name,
+          phone: formData.mobile,
+          city: formData.location.split(",")[0]?.trim() || formData.location,
+          state: formData.location.split(",")[1]?.trim() || "India",
+          reraNo: formData.licenseNumber,
+          experienceYears: formData.experience,
+          specialization: formData.specialization,
+          companyName: formData.agencyName,
+          memberType: "realtor",
+          selectedTier: selectedTier === "red" ? "orange" : selectedTier,
+          photoDataUrlOrFile: formData.photo,
+          employeeId: nextSequentialId,
+        });
+
+        await refreshProfile();
+        setFormData((prev) => ({ ...prev, employeeId: nextSequentialId }));
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            "rm_last_member",
+            JSON.stringify({
+              name: formData.name,
+              employeeId: nextSequentialId,
+              phone: formData.mobile,
+              email: formData.email,
+              location: formData.location,
+              agencyName: formData.agencyName,
+              photo: formData.photo,
+              tier: selectedTier === "red" ? "orange" : selectedTier,
+              designation: formData.designation,
+              department: formData.department,
+            })
+          );
+        }
+        setIsGenerated(true);
+        setAuthSuccessMessage(`Member portal login created! Your official ID is ${nextSequentialId}.`);
+      } else {
+        // User already logged in, update profile with sequential ID in Firestore
+        await saveMemberProfile(user.uid, {
+          fullName: formData.name,
+          phone: formData.mobile,
+          city: formData.location.split(",")[0]?.trim() || formData.location,
+          companyName: formData.agencyName,
+          reraNo: formData.licenseNumber,
+          experienceYears: formData.experience,
+          specialization: formData.specialization,
+          selectedTier: selectedTier === "red" ? "orange" : selectedTier,
+          employeeId: nextSequentialId,
+          photoUrl: formData.photo,
+        });
+
+        await refreshProfile();
+        setFormData((prev) => ({ ...prev, employeeId: nextSequentialId }));
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            "rm_last_member",
+            JSON.stringify({
+              name: formData.name,
+              employeeId: nextSequentialId,
+              phone: formData.mobile,
+              email: formData.email,
+              location: formData.location,
+              agencyName: formData.agencyName,
+              photo: formData.photo,
+              tier: selectedTier === "red" ? "orange" : selectedTier,
+              designation: formData.designation,
+              department: formData.department,
+            })
+          );
+        }
+        setIsGenerated(true);
+        setAuthSuccessMessage(`ID Card activated with sequential ID: ${nextSequentialId}!`);
+      }
+    } catch (err: any) {
+      console.error("ID Card generation error:", err);
+      let msg = "Could not complete registration. Please check your details.";
+      if (err.code === "auth/email-already-in-use") {
+        msg = "This email is already registered. Please log in from the member portal.";
+      } else if (err.code === "auth/weak-password") {
+        msg = "Password should be at least 6 characters.";
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setAuthError(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // High-Resolution CR80 PNG Download (Exact ID Card Print Size - No A4 margins)
@@ -886,21 +1008,82 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                 )}
               </div>
 
-              {/* ID & Verification Info */}
+              {/* Password Section for Member Login Creation */}
+              {!user ? (
+                <div className="p-3 bg-[#EEF6FC] rounded-lg border border-[#BFDBFE] space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10.5px] font-black uppercase text-[#073F73] flex items-center gap-1.5">
+                      <FaLock className="text-[#0284C7]" />
+                      <span>Create Member Login Credentials</span>
+                    </span>
+                    <span className="text-[9.5px] font-extrabold text-[#0369A1] bg-white px-2 py-0.5 rounded-full border border-[#BFDBFE]">
+                      For Member Portal Login
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#334155] mb-1">
+                        Create Password <span className="text-red-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          required={!user}
+                          value={formData.password}
+                          onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                          placeholder="Min. 6 characters"
+                          className="w-full px-2.5 py-1.5 pr-8 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[12px] cursor-pointer"
+                        >
+                          {showPassword ? <FaEyeSlash /> : <FaEye />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-[#334155] mb-1">
+                        Confirm Password <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required={!user}
+                        value={formData.confirmPassword}
+                        onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                        placeholder="Re-enter password"
+                        className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-white"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[9.5px] text-[#475569]">
+                    Your email <strong>{formData.email}</strong> and this password will give you instant access to your <strong>Member Portal</strong> with your verified ID card.
+                  </p>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-emerald-50 rounded-lg border border-emerald-200 text-[11px] text-emerald-800 flex items-center justify-between">
+                  <span className="font-bold flex items-center gap-1.5">
+                    <FaCheck className="text-emerald-600" /> Logged in: <strong>{user.email}</strong>
+                  </span>
+                  <span className="text-[10px] bg-emerald-100 px-2 py-0.5 rounded font-black text-emerald-800">
+                    Active Member
+                  </span>
+                </div>
+              )}
+
+              {/* ID & Verification Info with Sequential Series (1111, 1112...) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-[10px] font-black uppercase text-[#475569]">
-                      Member ID (Auto-Generated)
+                    <label className="text-[10px] font-black uppercase text-[#475569] flex items-center gap-1">
+                      <span>Sequential Member ID</span>
                     </label>
-                    <button
-                      type="button"
-                      onClick={() => handleRegenerateId(selectedTier)}
-                      className="text-[9px] font-extrabold text-[#0284C7] hover:underline flex items-center gap-1 cursor-pointer"
-                    >
-                      <FaSyncAlt className="text-[8px]" />
-                      <span>Regenerate</span>
-                    </button>
+                    <span className="text-[8.5px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                      Series Starts: 1111
+                    </span>
                   </div>
                   <input
                     type="text"
@@ -912,25 +1095,57 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
                 <div className="flex flex-col justify-end">
                   <span className="text-[9.5px] text-[#64748B] font-medium leading-tight">
-                    Unique Member ID linked to your chosen card tier & verification QR code.
+                    Automatically assigned sequentially in series (1111 → 1112 → 1113...) for verifiable official credentials.
                   </span>
                 </div>
               </div>
+
+              {/* Auth Error Banner */}
+              {authError && (
+                <div className="p-2.5 bg-red-50 border border-red-200 rounded-md text-[11px] font-bold text-red-700 flex items-start gap-2">
+                  <FaExclamationTriangle className="text-red-500 mt-0.5 flex-shrink-0" />
+                  <span>{authError}</span>
+                </div>
+              )}
 
               {/* Confirmation / Submit Button */}
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full py-2.5 px-3 rounded-md bg-[#073F73] hover:bg-[#052E54] text-white text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
+                  disabled={isSubmitting}
+                  className="w-full py-2.5 px-3 rounded-md bg-[#073F73] hover:bg-[#052E54] disabled:bg-gray-400 text-white text-[12px] font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer"
                 >
-                  <span>Update & Generate Verified ID Card</span>
+                  {isSubmitting ? (
+                    <>
+                      <FaSpinner className="animate-spin text-[12px]" />
+                      <span>Activating Member ID & Creating Login...</span>
+                    </>
+                  ) : (
+                    <span>Generate ID Card & Activate Member Login</span>
+                  )}
                 </button>
               </div>
 
+              {/* Success Notification & Portal Link */}
               {isGenerated && (
-                <div className="p-2 bg-[#ECFDF5] border border-[#A7F3D0] rounded-md text-[11px] font-black text-[#065F46] flex items-center justify-center gap-1.5 animate-fade-in">
-                  <FaCheck className="text-[#059669]" />
-                  <span>ID Card successfully updated! You can now Download or Print your card.</span>
+                <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] rounded-md space-y-2.5 text-[11.5px] text-[#065F46] animate-fade-in">
+                  <div className="flex items-center gap-2 font-black">
+                    <FaCheck className="text-[#059669] text-base flex-shrink-0" />
+                    <span>{authSuccessMessage || `ID Card & Member Login Created Successfully! Assigned ID: ${formData.employeeId}`}</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#A7F3D0]/60">
+                    <Link
+                      href="/dashboard"
+                      onClick={() => onClose()}
+                      className="bg-[#073F73] hover:bg-[#052E54] text-white text-[11px] font-black px-3.5 py-1.5 rounded transition-colors inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                    >
+                      <span>Go to Member Dashboard & View ID Card</span>
+                      <FaArrowRight className="text-[10px]" />
+                    </Link>
+                    <span className="text-[10px] text-gray-600 font-medium">
+                      Your ID card is now live in your personal Member Portal.
+                    </span>
+                  </div>
                 </div>
               )}
             </form>

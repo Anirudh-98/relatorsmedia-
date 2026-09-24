@@ -12,6 +12,7 @@ import {
   limit,
   serverTimestamp,
   Timestamp,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "./config";
 
@@ -192,5 +193,68 @@ export async function getMemberLeads(memberUid: string): Promise<LeadInquiryData
   } catch (error) {
     console.warn("Firestore getMemberLeads error:", error);
     return [];
+  }
+}
+
+// ----------------------------------------------------
+// Sequential ID Counter (Starts from 1111 -> 1112 -> 1113...)
+// ----------------------------------------------------
+
+export async function getNextEmployeeId(tier: "green" | "blue" | "orange" | "red" | string): Promise<string> {
+  const prefix = tier === "orange" || tier === "red" ? "RM-A" : tier === "blue" ? "RM-B" : "RM-C";
+  const counterRef = doc(db, "counters", "memberSequence");
+
+  try {
+    const nextSeq = await runTransaction(db, async (transaction) => {
+      const counterSnap = await transaction.get(counterRef);
+      let current = 1110;
+      if (counterSnap.exists()) {
+        const data = counterSnap.data();
+        current = typeof data.currentSequence === "number" ? data.currentSequence : 1110;
+      }
+      const next = current + 1;
+      transaction.set(counterRef, { currentSequence: next, updatedAt: serverTimestamp() }, { merge: true });
+      return next;
+    });
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("rm_member_seq", nextSeq.toString());
+    }
+    return `${prefix}-${nextSeq}`;
+  } catch (err) {
+    console.warn("Transaction counter fallback:", err);
+    let next = 1111;
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("rm_member_seq");
+      if (stored) {
+        next = parseInt(stored, 10) + 1;
+      }
+      localStorage.setItem("rm_member_seq", next.toString());
+    }
+    return `${prefix}-${next}`;
+  }
+}
+
+export async function peekNextEmployeeId(tier: "green" | "blue" | "orange" | "red" | string): Promise<string> {
+  const prefix = tier === "orange" || tier === "red" ? "RM-A" : tier === "blue" ? "RM-B" : "RM-C";
+  const counterRef = doc(db, "counters", "memberSequence");
+
+  try {
+    const snap = await getDoc(counterRef);
+    let current = 1110;
+    if (snap.exists()) {
+      const data = snap.data();
+      current = typeof data.currentSequence === "number" ? data.currentSequence : 1110;
+    }
+    return `${prefix}-${current + 1}`;
+  } catch {
+    let next = 1111;
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("rm_member_seq");
+      if (stored) {
+        next = parseInt(stored, 10) + 1;
+      }
+    }
+    return `${prefix}-${next}`;
   }
 }

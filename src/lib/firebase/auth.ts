@@ -9,7 +9,7 @@ import {
   NextOrObserver,
 } from "firebase/auth";
 import { auth } from "./config";
-import { saveMemberProfile, getMemberProfile, MemberProfileData } from "./db";
+import { saveMemberProfile, getMemberProfile, MemberProfileData, getNextEmployeeId } from "./db";
 import { uploadMemberPhoto } from "./storage";
 
 export interface RegisterMemberParams {
@@ -26,6 +26,7 @@ export interface RegisterMemberParams {
   memberType: "realtor" | "builder" | "professional";
   selectedTier: "green" | "blue" | "orange";
   photoDataUrlOrFile?: File | string;
+  employeeId?: string;
 }
 
 /**
@@ -37,10 +38,8 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
   const userCredential = await createUserWithEmailAndPassword(auth, params.email, params.password);
   const user = userCredential.user;
 
-  // 2. Generate Member Employee ID
-  const tierPrefix = params.selectedTier === "orange" ? "RM-A" : params.selectedTier === "blue" ? "RM-B" : "RM-C";
-  const randomNum = Math.floor(1000 + Math.random() * 9000);
-  const generatedEmpId = `${tierPrefix}-${randomNum}`;
+  // 2. Generate Member Employee ID sequentially starting from 1111
+  const generatedEmpId = params.employeeId || (await getNextEmployeeId(params.selectedTier));
 
   // 3. Upload photo to Firebase Storage if provided
   let photoUrl = "/images/rohan_deshmukh.png";

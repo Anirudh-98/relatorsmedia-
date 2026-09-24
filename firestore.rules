@@ -19,5 +19,10 @@ service cloud.firestore {
       allow create: if true;
       allow read: if request.auth != null;
     }
+
+    // Counters: readable and writable for sequential member IDs
+    match /counters/{counterId} {
+      allow read, write: if true;
+    }
   }
 }

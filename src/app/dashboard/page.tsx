@@ -26,6 +26,18 @@ import {
 export default function DashboardPage() {
   const { user, memberProfile, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<"card" | "listings" | "leads" | "earnings">("card");
+  const [localMember, setLocalMember] = useState<any>(null);
+
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = localStorage.getItem("rm_last_member");
+      if (stored) {
+        try {
+          setLocalMember(JSON.parse(stored));
+        } catch {}
+      }
+    }
+  }, []);
 
   // If member is logged in via Firebase Auth / Firestore, construct their live profile card
   const currentEmployee: RealtorsMediaEmployee = memberProfile
@@ -43,17 +55,32 @@ export default function DashboardPage() {
         phone: memberProfile.phone ? `+91 ${memberProfile.phone}` : "+91 9876543210",
         email: memberProfile.email || user?.email || "member@realtorsmedia.com",
       }
+    : localMember
+    ? {
+        name: localMember.name,
+        designation: localMember.designation || "VERIFIED REALTOR",
+        employeeId: localMember.employeeId,
+        department: localMember.department || "Property Sales & Channel",
+        location: localMember.location || "India",
+        issuedDate: "24 SEP 2026",
+        validTill: "23 SEP 2028",
+        photo: localMember.photo || "/images/rohan_deshmukh.png",
+        verificationUrl: `https://realtorsmedia.com/verify/${localMember.employeeId}`,
+        theme: localMember.tier || "blue",
+        phone: localMember.phone || "+91 9876543210",
+        email: localMember.email || user?.email || "member@realtorsmedia.com",
+      }
     : user
     ? {
         name: user.displayName || user.email?.split("@")[0] || "Registered Member",
         designation: "VERIFIED REALTOR",
-        employeeId: "RM-B-2026",
+        employeeId: "RM-B-1111",
         department: "Property Brokerage Cell",
         location: "India",
         issuedDate: "24 SEP 2026",
         validTill: "23 SEP 2028",
         photo: user.photoURL || "/images/rohan_deshmukh.png",
-        verificationUrl: "https://realtorsmedia.com/verify/RM-B-2026",
+        verificationUrl: "https://realtorsmedia.com/verify/RM-B-1111",
         theme: "blue",
         phone: "+91 9876543210",
         email: user.email || "member@realtorsmedia.com",

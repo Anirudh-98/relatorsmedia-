@@ -25,12 +25,18 @@ import {
 } from "react-icons/fa";
 
 import { registerMember } from "@/lib/firebase/auth";
+import { peekNextEmployeeId } from "@/lib/firebase/db";
 
 export default function RegisterPage() {
   const router = useRouter();
 
   // Tier selection: green, blue, orange
   const [selectedTier, setSelectedTier] = useState<"green" | "blue" | "orange">("green");
+  const [previewId, setPreviewId] = useState("RM-C-1111");
+
+  useEffect(() => {
+    peekNextEmployeeId(selectedTier).then((id) => setPreviewId(id));
+  }, [selectedTier]);
 
   // User type: realtor, builder, professional
   const [memberType, setMemberType] = useState<"realtor" | "builder" | "professional">("realtor");
@@ -193,12 +199,7 @@ export default function RegisterPage() {
         : memberType === "builder"
         ? "BUILDER / DEVELOPER"
         : "INDUSTRY PROFESSIONAL",
-    employeeId:
-      selectedTier === "orange"
-        ? "RM-A-2026"
-        : selectedTier === "blue"
-        ? "RM-B-2026"
-        : "RM-C-2026",
+    employeeId: previewId,
     department:
       memberType === "realtor"
         ? "Property Brokerage Cell"
@@ -206,12 +207,10 @@ export default function RegisterPage() {
         ? "Developer Projects Wing"
         : "Allied Services Cell",
     location: `${formData.city || "City"}, ${formData.state || "State"}`,
-    issuedDate: "23 SEP 2026",
-    validTill: "22 SEP 2028",
+    issuedDate: "24 SEP 2026",
+    validTill: "23 SEP 2028",
     photo: formData.photo || "/images/rohan_deshmukh.png",
-    verificationUrl: `https://realtorsmedia.com/verify/${
-      selectedTier === "orange" ? "RM-A-2026" : selectedTier === "blue" ? "RM-B-2026" : "RM-C-2026"
-    }`,
+    verificationUrl: `https://realtorsmedia.com/verify/${previewId}`,
     theme: selectedTier === "orange" ? "red" : selectedTier,
     phone: `+91 ${formData.phone}`,
     email: formData.email,
