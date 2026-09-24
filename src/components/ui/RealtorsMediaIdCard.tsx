@@ -3,16 +3,7 @@
 import React, { useRef, useState, useEffect } from "react";
 import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
-import {
-  FaHome,
-  FaBullhorn,
-  FaUserFriends,
-  FaChartLine,
-  FaMapMarkerAlt,
-  FaPhoneAlt,
-  FaGlobe,
-  FaEnvelope,
-} from "react-icons/fa";
+import { FaPhoneAlt, FaGlobe, FaEnvelope, FaMapMarkerAlt } from "react-icons/fa";
 import { BarcodeSVG } from "./BarcodeSVG";
 import { RealtorsMediaEmployee } from "@/types";
 import { getSafePhotoUrl, PLACEHOLDER_PHOTO } from "@/lib/utils/imageUtils";
@@ -41,114 +32,48 @@ const DEFAULT_EMPLOYEE: RealtorsMediaEmployee = {
   theme: "blue",
 };
 
-// Internal reference design canvas size (CR80 portrait: 54mm x 86mm -> ratio ~ 1.5925)
+// CR80 portrait canvas (54mm × 86mm → ratio ≈ 1.5925)
 const CANVAS_WIDTH = 638;
 const CANVAS_HEIGHT = 1016;
 
 const THEME_CONFIGS = {
   blue: {
-    topGrad: { start: "#05254A", mid: "#073A72", end: "#0C5696" },
-    bottomGrad: { start: "#05254A", mid: "#073A72", end: "#0C5696" },
-    skyline: "#38BDF8",
-    brandMediaColor: "#38BDF8",
-    taglineBorder: "border-[#38BDF8]/40",
-    taglines: "#93C5FD",
-    platformSubtext: "#BAE6FD",
-    starAura: "#38BDF8",
-    starF1: "#38BDF8",
-    starF2: "#0284C7",
-    starF3: "#0369A1",
-    photoRing: "from-[#38BDF8] via-[#0284C7] to-[#0369A1]",
-    photoShadow: "shadow-[#0284C7]/20",
-    designationColor: "text-[#0284C7]",
-    promoTitleColor: "text-[#073F73]",
-    featureGradient: "from-[#0369A1] to-[#0284C7]",
+    gradStart: "#04244A",
+    gradMid: "#073A72",
+    gradEnd: "#0C5696",
+    badgeBg: "#073A72",
     badgeText: "EXECUTIVE MEMBER",
-    badgeClass: "bg-[#E0F2FE] text-[#0369A1] border-[#BAE6FD]",
+    nameColor: "#073A72",
+    accentColor: "#0C5696",
   },
   green: {
-    topGrad: { start: "#042F24", mid: "#065F46", end: "#047857" },
-    bottomGrad: { start: "#042F24", mid: "#065F46", end: "#047857" },
-    skyline: "#34D399",
-    brandMediaColor: "#34D399",
-    taglineBorder: "border-[#34D399]/40",
-    taglines: "#A7F3D0",
-    platformSubtext: "#D1FAE5",
-    starAura: "#34D399",
-    starF1: "#34D399",
-    starF2: "#059669",
-    starF3: "#047857",
-    photoRing: "from-[#34D399] via-[#059669] to-[#047857]",
-    photoShadow: "shadow-[#059669]/20",
-    designationColor: "text-[#059669]",
-    promoTitleColor: "text-[#065F46]",
-    featureGradient: "from-[#047857] to-[#10B981]",
+    gradStart: "#042F24",
+    gradMid: "#065F46",
+    gradEnd: "#047857",
+    badgeBg: "#065F46",
     badgeText: "VERIFIED REALTOR",
-    badgeClass: "bg-[#DCFCE7] text-[#15803D] border-[#BBF7D0]",
+    nameColor: "#065F46",
+    accentColor: "#047857",
   },
   orange: {
-    topGrad: { start: "#7C2D12", mid: "#C2410C", end: "#EA580C" },
-    bottomGrad: { start: "#7C2D12", mid: "#C2410C", end: "#EA580C" },
-    skyline: "#FB923C",
-    brandMediaColor: "#FDBA74",
-    taglineBorder: "border-[#FDBA74]/40",
-    taglines: "#FED7AA",
-    platformSubtext: "#FFEDD5",
-    starAura: "#F97316",
-    starF1: "#FDBA74",
-    starF2: "#EA580C",
-    starF3: "#9A3412",
-    photoRing: "from-[#FDBA74] via-[#EA580C] to-[#9A3412]",
-    photoShadow: "shadow-[#EA580C]/25",
-    designationColor: "text-[#EA580C]",
-    promoTitleColor: "text-[#C2410C]",
-    featureGradient: "from-[#C2410C] to-[#F97316]",
+    gradStart: "#7C2D12",
+    gradMid: "#C2410C",
+    gradEnd: "#EA580C",
+    badgeBg: "#C2410C",
     badgeText: "VIP ELITE PARTNER",
-    badgeClass: "bg-[#FFF7ED] text-[#C2410C] border-[#FFEDD5]",
+    nameColor: "#C2410C",
+    accentColor: "#EA580C",
   },
   red: {
-    topGrad: { start: "#7C2D12", mid: "#C2410C", end: "#EA580C" },
-    bottomGrad: { start: "#7C2D12", mid: "#C2410C", end: "#EA580C" },
-    skyline: "#FB923C",
-    brandMediaColor: "#FDBA74",
-    taglineBorder: "border-[#FDBA74]/40",
-    taglines: "#FED7AA",
-    platformSubtext: "#FFEDD5",
-    starAura: "#F97316",
-    starF1: "#FDBA74",
-    starF2: "#EA580C",
-    starF3: "#9A3412",
-    photoRing: "from-[#FDBA74] via-[#EA580C] to-[#9A3412]",
-    photoShadow: "shadow-[#EA580C]/25",
-    designationColor: "text-[#EA580C]",
-    promoTitleColor: "text-[#C2410C]",
-    featureGradient: "from-[#C2410C] to-[#F97316]",
+    gradStart: "#7C2D12",
+    gradMid: "#C2410C",
+    gradEnd: "#EA580C",
+    badgeBg: "#C2410C",
     badgeText: "VIP ELITE PARTNER",
-    badgeClass: "bg-[#FFF7ED] text-[#C2410C] border-[#FFEDD5]",
+    nameColor: "#C2410C",
+    accentColor: "#EA580C",
   },
 };
-
-// Lucide CircleCheckBig icon requested for Verified Realtor status
-const VerifiedCheckBigIcon: React.FC<{ className?: string; size?: number }> = ({
-  className = "",
-  size = 13,
-}) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width={size}
-    height={size}
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2.2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={`shrink-0 ${className}`}
-  >
-    <path d="M21.801 10A10 10 0 1 1 17 3.335" />
-    <path d="m9 11 3 3L22 4" />
-  </svg>
-);
 
 export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
   employee = DEFAULT_EMPLOYEE,
@@ -163,32 +88,18 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState<number>(1);
 
-  // Measure container and scale canvas responsively without altering internal proportions
   useEffect(() => {
     const updateScale = () => {
       if (containerRef.current) {
-        const clientWidth = containerRef.current.clientWidth;
-        if (clientWidth > 0) {
-          setScale(clientWidth / CANVAS_WIDTH);
-        }
+        const w = containerRef.current.clientWidth;
+        if (w > 0) setScale(w / CANVAS_WIDTH);
       }
     };
-
     updateScale();
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateScale();
-    });
-
-    if (containerRef.current) {
-      resizeObserver.observe(containerRef.current);
-    }
-
+    const ro = new ResizeObserver(updateScale);
+    if (containerRef.current) ro.observe(containerRef.current);
     window.addEventListener("resize", updateScale);
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener("resize", updateScale);
-    };
+    return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
   }, []);
 
   const empTierFromId = employee?.employeeId?.startsWith("RM-C")
@@ -199,18 +110,30 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
     ? "blue"
     : undefined;
 
-  const mergedEmployee = employee;
-  const activeThemeKey = theme || employee?.theme || empTierFromId || "green";
-  const currentTheme = THEME_CONFIGS[activeThemeKey] || THEME_CONFIGS.green;
-  const gradientPrefix = id.replace(/[^a-zA-Z0-9_-]/g, "");
-  const rawLicense = (mergedEmployee.licenseNumber || mergedEmployee.reraNumber || "").trim();
-  const licenseValue = /^n\/?a$/i.test(rawLicense) ? "" : rawLicense;
+  const activeThemeKey = (theme || employee?.theme || empTierFromId || "green") as keyof typeof THEME_CONFIGS;
+  const T = THEME_CONFIGS[activeThemeKey] || THEME_CONFIGS.green;
+  const gid = id.replace(/[^a-zA-Z0-9_-]/g, "");
+
+  const rawPhoto = employee.photo || (employee as any).photoUrl || PLACEHOLDER_PHOTO;
+  const displayPhoto = getSafePhotoUrl(rawPhoto);
+
+  const qrValue = employee.employeeId
+    ? `https://www.realtorsmedia.world/verify/${employee.employeeId}`
+    : (employee.verificationUrl || "https://www.realtorsmedia.world")
+        .replace("realtorsmedia.com", "www.realtorsmedia.world")
+        .replace("https://realtorsmedia.world", "https://www.realtorsmedia.world");
+
+  const infoRows = [
+    { label: "EMP ID",     value: employee.employeeId },
+    { label: "SPECIALITY", value: employee.specialization || employee.department || "—" },
+    { label: "LOCATION",   value: employee.location },
+    { label: "VALID TILL", value: employee.validTill },
+  ];
 
   return (
     <div
       ref={containerRef}
-      className={`relative select-none ${className} ${interactive ? "cursor-pointer transition-transform hover:scale-[1.01]" : ""
-        }`}
+      className={`relative select-none ${className} ${interactive ? "cursor-pointer transition-transform hover:scale-[1.01]" : ""}`}
       style={{
         width: width ? (typeof width === "number" ? `${width}px` : width) : "100%",
         aspectRatio: `${CANVAS_WIDTH} / ${CANVAS_HEIGHT}`,
@@ -218,7 +141,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
       }}
       onClick={onClick}
     >
-      {/* Fixed Canvas scaled via CSS Transform with Equal Corner Radius */}
+      {/* ── Fixed-size canvas scaled via CSS transform ── */}
       <div
         id={id}
         ref={cardRef}
@@ -231,11 +154,12 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           clipPath: "inset(0 round 36px)",
           WebkitClipPath: "inset(0 round 36px)",
         }}
-        className="absolute top-0 left-0 overflow-hidden bg-[#F6F8FB] text-[#081C36] font-card antialiased shadow-lg border border-[#CBD5E1]"
+        className="absolute top-0 left-0 overflow-hidden bg-white text-[#0F172A] antialiased shadow-xl border border-[#E2E8F0]"
       >
-        {/* ========================================================
-            SVG DEFINITIONS: GRADIENTS & DECORATIVE WAVES
-           ======================================================== */}
+
+        {/* ══════════════════════════════════════════
+            1. SVG BACKGROUND — white + themed wave
+           ══════════════════════════════════════════ */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none z-0"
           viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
@@ -243,124 +167,38 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
-            {/* Top Corporate Gradient */}
-            <linearGradient id={`${gradientPrefix}-topNavyGrad`} x1="0" y1="0" x2="638" y2="280" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor={currentTheme.topGrad.start} />
-              <stop offset="55%" stopColor={currentTheme.topGrad.mid} />
-              <stop offset="100%" stopColor={currentTheme.topGrad.end} />
+            <linearGradient id={`${gid}-wave`} x1="638" y1="0" x2="100" y2="380" gradientUnits="userSpaceOnUse">
+              <stop offset="0%"   stopColor={T.gradStart} />
+              <stop offset="50%"  stopColor={T.gradMid} />
+              <stop offset="100%" stopColor={T.gradEnd} />
             </linearGradient>
-
-            {/* Top Golden Ribbon Gradient */}
-            <linearGradient id={`${gradientPrefix}-topGoldGrad`} x1="0" y1="240" x2="638" y2="295" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#D9941C" />
-              <stop offset="45%" stopColor="#F5BF4B" />
-              <stop offset="85%" stopColor="#E5A627" />
-              <stop offset="100%" stopColor="#C9810F" />
-            </linearGradient>
-
-            {/* Bottom Golden Ribbon Gradient */}
-            <linearGradient id={`${gradientPrefix}-bottomGoldGrad`} x1="0" y1="925" x2="638" y2="885" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#C9810F" />
-              <stop offset="35%" stopColor="#F5BF4B" />
-              <stop offset="75%" stopColor="#E5A627" />
-              <stop offset="100%" stopColor="#D9941C" />
-            </linearGradient>
-
-            {/* Bottom Footer Gradient */}
-            <linearGradient id={`${gradientPrefix}-bottomNavyGrad`} x1="0" y1="920" x2="638" y2="1016" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor={currentTheme.bottomGrad.start} />
-              <stop offset="60%" stopColor={currentTheme.bottomGrad.mid} />
-              <stop offset="100%" stopColor={currentTheme.bottomGrad.end} />
-            </linearGradient>
-
-            {/* Equal 36px Corner Radius Clip Path for SVG */}
-            <clipPath id={`${gradientPrefix}-cardEqualClip`}>
+            <clipPath id={`${gid}-clip`}>
               <rect x="0" y="0" width="638" height="1016" rx="36" ry="36" />
             </clipPath>
           </defs>
-
-          {/* All background paths clipped to exact equal corner radius */}
-          <g clipPath={`url(#${gradientPrefix}-cardEqualClip)`}>
-            {/* TOP HEADER THEMED BACKGROUND — dips lower on left for logo placement */}
+          <g clipPath={`url(#${gid}-clip)`}>
+            {/* White card base */}
+            <rect width="638" height="1016" fill="#FFFFFF" />
+            {/* Themed wave blob — top right */}
             <path
-              d="M 0 0 L 638 0 L 638 220 C 470 220 200 255 0 265 Z"
-              fill={`url(#${gradientPrefix}-topNavyGrad)`}
+              d="M 162 0 L 638 0 L 638 390 C 520 355 395 268 275 200 C 185 145 108 66 162 0 Z"
+              fill={`url(#${gid}-wave)`}
             />
-
-            {/* TOP GOLDEN CURVED RIBBON */}
-            <path
-              d="M 0 265 C 200 255 470 220 638 220 L 638 229 C 470 229 200 264 0 274 Z"
-              fill={`url(#${gradientPrefix}-topGoldGrad)`}
-            />
-
-            {/* BOTTOM GOLDEN CURVED RIBBON */}
-            <path
-              d="M 0 914 C 225 926 445 892 638 887 L 638 894 C 445 899 225 933 0 921 Z"
-              fill={`url(#${gradientPrefix}-bottomGoldGrad)`}
-            />
-
-            {/* BOTTOM PLAIN THEMED FOOTER */}
-            <path
-              d="M 0 921 C 225 933 445 899 638 894 L 638 1016 L 0 1016 Z"
-              fill={`url(#${gradientPrefix}-bottomNavyGrad)`}
-            />
+            {/* Subtle bottom accent line */}
+            <rect x="0" y="1010" width="638" height="6" fill={T.gradMid} />
           </g>
         </svg>
 
-        {/* ========================================================
-            2. TOP BRANDING / HEADER AREA (no logo inside — logo is below curve)
-           ======================================================== */}
-        <div className="relative z-10 w-full pt-4 px-7 flex items-start justify-between">
-          {/* Brand Titles */}
-          <div className="flex flex-col justify-center pt-1">
-            <div className="flex items-baseline leading-none">
-              <span className="text-white font-extrabold text-[42px] tracking-tight">
-                Realtors
-              </span>
-              <span
-                className="font-black text-[42px] tracking-tight ml-1"
-                style={{ color: currentTheme.brandMediaColor }}
-              >
-                Media
-              </span>
-            </div>
-
-            {/* Sub-label: — DIGITAL — */}
-            <div className="flex items-center gap-2.5 mt-2">
-              <div className="h-[1.5px] w-8 bg-white/50" />
-              <span className="text-white/95 text-[16px] font-black uppercase tracking-[0.28em] leading-none">
-                DIGITAL
-              </span>
-              <div className="h-[1.5px] w-8 bg-white/50" />
-            </div>
-
-            {/* India's Real Estate Media Platform */}
-            <span
-              className="text-[18px] font-bold tracking-wide mt-2 leading-none whitespace-nowrap"
-              style={{ color: currentTheme.platformSubtext }}
-            >
-              India&apos;s Real Estate Media Platform
-            </span>
-          </div>
-
-          {/* RIGHT: People / Properties / Possibilities — vertical stack */}
-          <div className={`text-right border-r-[2.5px] ${currentTheme.taglineBorder} pr-3.5 mt-1`}>
-            <div className="text-[21px] font-bold leading-[1.36]" style={{ color: currentTheme.taglines }}>People</div>
-            <div className="text-[21px] font-bold leading-[1.36]" style={{ color: currentTheme.taglines }}>Properties</div>
-            <div className="text-[21px] font-bold leading-[1.36]" style={{ color: currentTheme.taglines }}>Possibilities</div>
-          </div>
-        </div>
-
-        {/* ========================================================
-            LOGO — placed OUTSIDE the header curve, on white background
-           ======================================================== */}
-        <div className="absolute left-[20px] top-[205px] z-20 w-[155px] h-[145px] bg-white rounded-[20px] shadow-lg border border-[#E2E8F0] flex items-center justify-center p-2">
+        {/* ══════════════════════════════════════════
+            2. LOGO — top-left on white
+           ══════════════════════════════════════════ */}
+        <div className="absolute left-[22px] top-[18px] z-10 w-[134px] h-[114px]">
           <div className="relative w-full h-full">
             <Image
               src="/idcard-logo.png"
               alt="Realtors Media Logo"
               fill
-              sizes="300px"
+              sizes="280px"
               className="object-contain"
               priority
               unoptimized
@@ -368,276 +206,174 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           </div>
         </div>
 
-        {/* ========================================================
-            3. MAIN BODY BACKGROUND: ARCHITECTURAL WATERMARK
-           ======================================================== */}
+        {/* ══════════════════════════════════════════
+            3. BRAND NAME — inside the wave
+           ══════════════════════════════════════════ */}
+        <div className="absolute left-[178px] top-[22px] z-10 pr-[20px]">
+          <div className="text-white font-black text-[46px] tracking-tight leading-none uppercase">
+            REALTORS MEDIA
+          </div>
+          <div className="text-white/88 font-semibold text-[18px] mt-[10px] leading-snug">
+            India&apos;s Real Estate Media Platform
+          </div>
+          <div className="text-white/75 font-semibold text-[17px] mt-[6px] leading-snug">
+            People | Properties | Possibilities
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════
+            4. BUILDING WATERMARK — right side
+           ══════════════════════════════════════════ */}
         <div
-          className="absolute right-0 top-[220px] w-[350px] h-[520px] pointer-events-none z-[2] opacity-[0.24]"
+          className="absolute right-0 top-[310px] w-[310px] h-[470px] pointer-events-none z-[2] opacity-[0.20]"
           style={{
             backgroundImage: "url('/images/building_watermark.jpg')",
             backgroundSize: "contain",
             backgroundPosition: "top right",
             backgroundRepeat: "no-repeat",
             mixBlendMode: "multiply",
-            maskImage: "linear-gradient(to left, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)",
-            WebkitMaskImage: "linear-gradient(to left, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 100%)",
+            maskImage: "linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)",
+            WebkitMaskImage: "linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)",
           }}
         />
 
-        {/* ========================================================
-            4. EMPLOYEE PHOTO & IDENTITY (LEFT COLUMN)
-           ======================================================== */}
-        {/* Photo Container — sits below the logo */}
-        <div className="absolute left-[20px] top-[375px] z-10">
-          <div className={`w-[175px] h-[185px] rounded-[22px] p-[3.5px] bg-gradient-to-br ${currentTheme.photoRing} shadow-md ${currentTheme.photoShadow}`}>
-            <div className="relative w-full h-full rounded-[18px] overflow-hidden bg-white">
-              {(() => {
-                const rawPhoto =
-                  mergedEmployee.photo ||
-                  (mergedEmployee as any).photoUrl ||
-                  PLACEHOLDER_PHOTO;
-                const displayPhoto = getSafePhotoUrl(rawPhoto);
-
-                return (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img
-                    src={displayPhoto}
-                    alt={mergedEmployee.name || "Member Photo"}
-                    className="w-full h-full object-cover object-center"
-                    crossOrigin={
-                      displayPhoto.startsWith("http://") || displayPhoto.startsWith("https://")
-                        ? "anonymous"
-                        : undefined
-                    }
-                    loading="eager"
-                    onError={(e) => {
-                      const target = e.currentTarget;
-                      if (!target.src.includes(PLACEHOLDER_PHOTO)) {
-                        target.src = PLACEHOLDER_PHOTO;
-                      }
-                    }}
-                  />
-                );
-              })()}
-            </div>
+        {/* ══════════════════════════════════════════
+            5. PHOTO — left column
+           ══════════════════════════════════════════ */}
+        <div className="absolute left-[24px] top-[216px] z-10">
+          <div
+            className="w-[205px] h-[218px] rounded-[22px] overflow-hidden border-[2.5px] shadow-md"
+            style={{ borderColor: T.accentColor + "55" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={displayPhoto}
+              alt={employee.name || "Member Photo"}
+              className="w-full h-full object-cover object-center"
+              crossOrigin={displayPhoto.startsWith("http") ? "anonymous" : undefined}
+              loading="eager"
+              onError={(e) => {
+                const t = e.currentTarget;
+                if (!t.src.includes(PLACEHOLDER_PHOTO)) t.src = PLACEHOLDER_PHOTO;
+              }}
+            />
           </div>
         </div>
 
-        {/* ========================================================
-            UNIQUE BARCODE (TOP RIGHT SIDE OF IMAGE) - ONLY BARCODE
-           ======================================================== */}
-        <div className="absolute right-[44px] top-[295px] z-10 w-[240px] h-[60px] flex items-center justify-center">
+        {/* ══════════════════════════════════════════
+            6. BARCODE — top right of body
+           ══════════════════════════════════════════ */}
+        <div className="absolute right-[24px] top-[218px] z-10 w-[265px] h-[65px] flex items-center justify-center">
           <BarcodeSVG
-            value={mergedEmployee.employeeId}
+            value={employee.employeeId}
             className="w-full h-full"
-            color="#081C36"
+            color="#0F172A"
           />
         </div>
 
-        {/* Employee Identity & Information Grid (Unified Flow) */}
-        <div className="absolute left-[20px] top-[577px] z-10 w-[335px] flex flex-col">
-          {/* Subtle Tier Badge */}
-          <div className="mb-1.5 flex items-center">
-            <span
-              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-black uppercase tracking-wider border shadow-2xs ${currentTheme.badgeClass}`}
-            >
-              <VerifiedCheckBigIcon size={14} />
-              <span>{currentTheme.badgeText}</span>
-            </span>
-          </div>
-
-          {/* Employee Name */}
-          <h1 className="text-[34px] font-black text-[#0B213D] leading-[1.1] tracking-tight">
-            {mergedEmployee.name}
-          </h1>
-
-          {/* Job Title / Designation / Agency */}
-          <div
-            className={`text-[16px] font-black uppercase tracking-[0.14em] mt-1.5 mb-4 leading-tight truncate flex items-center gap-1.5 ${currentTheme.designationColor}`}
-          >
-            <span className="truncate">
-              {mergedEmployee.specialization
-                || mergedEmployee.agencyName
-                || mergedEmployee.designation
-                || ""}
-            </span>
-          </div>
-
-          {/* 5. EMPLOYEE INFORMATION GRID */}
-          <div className="space-y-[11px] text-[19px] leading-tight">
-            {/* EMP ID */}
-            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">EMP ID</span>
-              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal">
-                {mergedEmployee.employeeId}
-              </span>
-            </div>
-
-            {/* Dept / Specialization */}
-            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">
-                {mergedEmployee.specialization ? "Specialty" : "Dept"}
-              </span>
-              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal truncate">
-                {mergedEmployee.specialization || mergedEmployee.department}
-              </span>
-            </div>
-
-            {/* Location */}
-            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">Location</span>
-              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal truncate">
-                {mergedEmployee.location}
-              </span>
-            </div>
-
-            {/* License / RERA or Issued */}
-            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">
-                {licenseValue ? "License" : "Issued"}
-              </span>
-              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal truncate">
-                {licenseValue || mergedEmployee.issuedDate}
-              </span>
-            </div>
-
-            {/* Valid Till */}
-            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">Valid Till</span>
-              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal">
-                {mergedEmployee.validTill}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* ========================================================
-            6. AUTHORIZED SIGNATORY (BOTTOM LEFT)
-           ======================================================== */}
-        <div className="absolute left-[20px] top-[800px] z-10 w-[200px]">
-          <div className="w-full h-[1.5px] bg-[#94A3B8] mb-1.5" />
-          <div className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider leading-none">
-            Authorized Signature
-          </div>
-        </div>
-
-        {/* ========================================================
-            7. RIGHT PROMOTIONAL SECTION: BUILDING BETTER COMMUNITIES
-           ======================================================== */}
-        <div className="absolute right-[44px] top-[375px] z-10 text-right w-[240px]">
-          <div className={`text-[22px] font-black uppercase leading-[1.18] tracking-tight ${currentTheme.promoTitleColor}`}>
-            BUILDING
-            <br />
-            BETTER
-            <br />
-            COMMUNITIES
-            <br />
+        {/* ══════════════════════════════════════════
+            7. BUILDING BETTER COMMUNITIES TOGETHER
+           ══════════════════════════════════════════ */}
+        <div className="absolute right-[24px] top-[310px] z-10 text-right">
+          <div className="text-[23px] font-black text-[#0F172A] tracking-tight leading-[1.2]">
+            BUILDING<br />
+            BETTER<br />
+            COMMUNITIES<br />
             TOGETHER
           </div>
-
-          {/* 4 Feature Badges with labels on left, themed round icon on right */}
-          <div className="mt-5 space-y-3 flex flex-col items-end">
-            {/* 1. LIST */}
-            <div className="flex items-center gap-2.5">
-              <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider">
-                LIST
-              </span>
-              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[15px]`}>
-                <FaHome />
-              </div>
-            </div>
-
-            {/* 2. PROMOTE */}
-            <div className="flex items-center gap-2.5">
-              <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider">
-                PROMOTE
-              </span>
-              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[15px]`}>
-                <FaBullhorn />
-              </div>
-            </div>
-
-            {/* 3. CONNECT */}
-            <div className="flex items-center gap-2.5">
-              <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider">
-                CONNECT
-              </span>
-              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[15px]`}>
-                <FaUserFriends />
-              </div>
-            </div>
-
-            {/* 4. GROW */}
-            <div className="flex items-center gap-2.5">
-              <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider">
-                GROW
-              </span>
-              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[15px]`}>
-                <FaChartLine />
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* ========================================================
-            8. QR CODE SECTION (LOWER RIGHT)
-           ======================================================== */}
-        <div className="absolute right-[44px] top-[685px] z-10 flex flex-col items-center">
-          <div className="w-[114px] h-[114px] bg-white rounded-[14px] p-2 border border-[#94A3B8]/60 shadow-sm flex items-center justify-center">
+        {/* ══════════════════════════════════════════
+            8. TIER BADGE
+           ══════════════════════════════════════════ */}
+        <div className="absolute left-[24px] top-[454px] z-10">
+          <span
+            className="inline-flex items-center px-4 py-[6px] rounded-full text-white text-[15px] font-black uppercase tracking-wider"
+            style={{ backgroundColor: T.badgeBg }}
+          >
+            {T.badgeText}
+          </span>
+        </div>
+
+        {/* ══════════════════════════════════════════
+            9. MEMBER NAME
+           ══════════════════════════════════════════ */}
+        <div className="absolute left-[24px] top-[502px] z-10 w-[370px]">
+          <h1
+            className="text-[46px] font-black tracking-tight leading-none"
+            style={{ color: T.nameColor }}
+          >
+            {employee.name}
+          </h1>
+        </div>
+
+        {/* ══════════════════════════════════════════
+            10. INFO GRID (4 rows)
+           ══════════════════════════════════════════ */}
+        <div className="absolute left-[24px] top-[580px] z-10 w-[365px] space-y-[12px]">
+          {infoRows.map(({ label, value }) => (
+            <div key={label} className="grid grid-cols-[128px_20px_1fr] items-baseline">
+              <span className="text-[16px] font-bold text-[#64748B] uppercase tracking-wide">
+                {label}
+              </span>
+              <span className="text-[18px] font-extrabold text-[#94A3B8]">:</span>
+              <span className="text-[20px] font-extrabold text-[#0F172A] truncate">
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* ══════════════════════════════════════════
+            11. QR CODE
+           ══════════════════════════════════════════ */}
+        <div className="absolute right-[24px] top-[580px] z-10 flex flex-col items-center gap-2">
+          <div className="w-[145px] h-[145px] bg-white rounded-[14px] p-1.5 border border-[#E2E8F0] shadow-sm flex items-center justify-center">
             <QRCodeSVG
-              value={
-                mergedEmployee.employeeId
-                  ? `https://www.realtorsmedia.world/verify/${mergedEmployee.employeeId}`
-                  : mergedEmployee.verificationUrl
-                  ? mergedEmployee.verificationUrl
-                      .replace("realtorsmedia.com", "www.realtorsmedia.world")
-                      .replace("https://realtorsmedia.world", "https://www.realtorsmedia.world")
-                  : "https://www.realtorsmedia.world"
-              }
-              size={98}
+              value={qrValue}
+              size={128}
               level="M"
               bgColor="#FFFFFF"
               fgColor="#0F172A"
             />
           </div>
-          <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider mt-2 leading-none">
+          <span className="text-[13px] font-black uppercase text-[#0F172A] tracking-wider">
             Scan to Verify
           </span>
         </div>
 
-        {/* ========================================================
-            9. BOTTOM THEMED FOOTER DETAILS (2 HORIZONTAL LINES)
-           ======================================================== */}
-        <div className="absolute left-[38px] right-[38px] top-[940px] z-10 flex flex-col justify-center gap-2.5 text-white">
-          {/* Line 1: Location (Left) & Phone (Right) */}
-          <div className="flex items-center justify-between text-[13px] font-bold tracking-wide">
-            <div className="flex items-center gap-2 min-w-0">
-              <FaMapMarkerAlt className="text-[#F5BF4B] text-[14px] shrink-0" />
-              <span className="truncate">Archana Arcade IT Complex - South Block, 407</span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 ml-3">
-              <FaPhoneAlt className="text-[#F5BF4B] text-[13px] shrink-0" />
-              <span>8096792778, 9441185799</span>
-            </div>
-          </div>
-
-          {/* Line 2: Website (Left) & Email (Right) */}
-          <div className="flex items-center justify-between text-[13px] font-bold tracking-wide">
-            <div className="flex items-center gap-2 min-w-0">
-              <FaGlobe className="text-[#F5BF4B] text-[13px] shrink-0" />
-              <span>www.realtorsmedia.world</span>
-            </div>
-            <div className="flex items-center gap-2 shrink-0 ml-3">
-              <FaEnvelope className="text-[#F5BF4B] text-[13px] shrink-0" />
-              <span>realtorsmedia.info@gmail.com</span>
-            </div>
+        {/* ══════════════════════════════════════════
+            12. AUTHORIZED SIGNATURE
+           ══════════════════════════════════════════ */}
+        <div className="absolute left-[24px] top-[838px] z-10 w-[260px]">
+          <div className="w-full h-[1.5px] bg-[#94A3B8] mb-2" />
+          <div className="text-[14px] font-black uppercase text-[#0F172A] tracking-[0.12em] leading-none">
+            Authorized Signature
           </div>
         </div>
+
+        {/* ══════════════════════════════════════════
+            13. FOOTER — right-aligned contact info
+           ══════════════════════════════════════════ */}
+        <div className="absolute right-[24px] top-[868px] z-10 text-right space-y-[9px]">
+          <div className="flex items-center justify-end gap-2.5 text-[14px] font-semibold text-[#0F172A]">
+            <span>www.realtorsmedia.world</span>
+            <FaGlobe className="text-[#64748B] text-[14px] shrink-0" />
+          </div>
+          <div className="flex items-center justify-end gap-2.5 text-[14px] font-semibold text-[#0F172A]">
+            <span>+91 8096792778, +91 9441185799</span>
+            <FaPhoneAlt className="text-[#64748B] text-[13px] shrink-0" />
+          </div>
+          <div className="flex items-center justify-end gap-2.5 text-[14px] font-semibold text-[#0F172A]">
+            <span>realtorsmedia.info@gmail.com</span>
+            <FaEnvelope className="text-[#64748B] text-[14px] shrink-0" />
+          </div>
+          <div className="flex items-center justify-end gap-2.5 text-[14px] font-semibold text-[#0F172A]">
+            <span>Archana Arcade, IT Complex - South Block, 407</span>
+            <FaMapMarkerAlt className="text-[#64748B] text-[14px] shrink-0" />
+          </div>
+        </div>
+
       </div>
     </div>
   );
