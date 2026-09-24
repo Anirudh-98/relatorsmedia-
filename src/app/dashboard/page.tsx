@@ -24,8 +24,16 @@ import {
 } from "react-icons/fa";
 
 export default function DashboardPage() {
-  const { user, memberProfile, logout, loading, refreshProfile } = useAuth();
+  const { user, memberProfile, setMemberProfile, logout, loading, refreshProfile } = useAuth();
   const [isIdModalOpen, setIsIdModalOpen] = useState(false);
+  const [localProfile, setLocalProfile] = useState<any>(null);
+
+  // If user is authenticated, ensure we poll/fetch Firestore profile immediately
+  useEffect(() => {
+    if (user && !memberProfile) {
+      refreshProfile(user);
+    }
+  }, [user, memberProfile, refreshProfile]);
 
   // Login form state for unauthenticated visitors
   const [loginEmail, setLoginEmail] = useState("");
@@ -54,64 +62,66 @@ export default function DashboardPage() {
     }
   };
 
+  const activeProfile = memberProfile || localProfile;
+
   // Determine tier theme: user explicitly selected Green Tier (RM-C)
-  const empId = memberProfile?.employeeId || "";
+  const empId = activeProfile?.employeeId || "";
   const resolvedTier: "green" | "blue" | "orange" =
-    memberProfile?.selectedTier === "green" ||
-    memberProfile?.tier === "green" ||
+    activeProfile?.selectedTier === "green" ||
+    activeProfile?.tier === "green" ||
     empId.startsWith("RM-C")
       ? "green"
-      : memberProfile?.selectedTier === "orange" ||
-        (memberProfile?.tier as string) === "orange" ||
-        (memberProfile?.tier as string) === "red" ||
+      : activeProfile?.selectedTier === "orange" ||
+        (activeProfile?.tier as string) === "orange" ||
+        (activeProfile?.tier as string) === "red" ||
         empId.startsWith("RM-A")
       ? "orange"
-      : memberProfile?.selectedTier === "blue" ||
-        memberProfile?.tier === "blue" ||
+      : activeProfile?.selectedTier === "blue" ||
+        activeProfile?.tier === "blue" ||
         empId.startsWith("RM-B")
       ? "blue"
       : "green"; // Default to Green Tier
 
   // Check if profile exists in Firestore database
-  const isProfileComplete = !!(memberProfile && memberProfile.employeeId);
+  const isProfileComplete = !!(activeProfile && activeProfile.employeeId);
 
   // 100% Real-time database details from Firestore - ZERO hardcoded dummy presets
   const currentEmployee: RealtorsMediaEmployee = {
     name:
-      memberProfile?.fullName ||
-      memberProfile?.name ||
+      activeProfile?.fullName ||
+      activeProfile?.name ||
       (user?.displayName && user.displayName !== "Verified Member"
         ? user.displayName
         : user?.email?.split("@")[0] || ""),
     designation:
-      memberProfile?.designation ||
-      (memberProfile?.agencyName ? `${memberProfile.agencyName} - REALTOR` : "VERIFIED REALTOR"),
-    employeeId: memberProfile?.employeeId || "",
-    department: memberProfile?.department || "Property Sales & Channel",
+      activeProfile?.designation ||
+      (activeProfile?.agencyName ? `${activeProfile.agencyName} - REALTOR` : "VERIFIED REALTOR"),
+    employeeId: activeProfile?.employeeId || "",
+    department: activeProfile?.department || "Property Sales & Channel",
     location:
-      memberProfile?.location ||
-      (memberProfile?.city
-        ? `${memberProfile.city}, ${memberProfile.state || "India"}`
+      activeProfile?.location ||
+      (activeProfile?.city
+        ? `${activeProfile.city}, ${activeProfile.state || "India"}`
         : ""),
-    issuedDate: memberProfile?.issuedDate || "",
-    validTill: memberProfile?.validTill || "",
+    issuedDate: activeProfile?.issuedDate || "",
+    validTill: activeProfile?.validTill || "",
     photo:
-      memberProfile?.photoUrl ||
-      memberProfile?.photo ||
+      activeProfile?.photoUrl ||
+      activeProfile?.photo ||
       user?.photoURL ||
       "/images/rohan_deshmukh.png",
     verificationUrl:
-      memberProfile?.verificationUrl ||
-      (memberProfile?.employeeId
-        ? `https://realtorsmedia.world/verify/${memberProfile.employeeId}`
+      activeProfile?.verificationUrl ||
+      (activeProfile?.employeeId
+        ? `https://realtorsmedia.world/verify/${activeProfile.employeeId}`
         : ""),
     theme: resolvedTier,
-    phone: memberProfile?.phone || memberProfile?.mobile || "",
-    email: memberProfile?.email || user?.email || "",
-    agencyName: memberProfile?.agencyName || memberProfile?.companyName || "",
-    licenseNumber: memberProfile?.licenseNumber || memberProfile?.reraNo || "",
-    experience: memberProfile?.experience || memberProfile?.experienceYears || "",
-    specialization: memberProfile?.specialization || "Residential Properties",
+    phone: activeProfile?.phone || activeProfile?.mobile || "",
+    email: activeProfile?.email || user?.email || "",
+    agencyName: activeProfile?.agencyName || activeProfile?.companyName || "",
+    licenseNumber: activeProfile?.licenseNumber || activeProfile?.reraNo || "",
+    experience: activeProfile?.experience || activeProfile?.experienceYears || "",
+    specialization: activeProfile?.specialization || "Residential Properties",
   };
 
   // If loading auth state
@@ -417,6 +427,10 @@ export default function DashboardPage() {
         onClose={() => setIsIdModalOpen(false)}
         initialEmployee={isProfileComplete ? currentEmployee : undefined}
         initialTier={resolvedTier}
+        onProfileUpdated={(updatedProfile) => {
+          setLocalProfile(updatedProfile);
+          setMemberProfile(updatedProfile);
+        }}
       />
     </PortalLayout>
   );

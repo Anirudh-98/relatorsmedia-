@@ -31,7 +31,7 @@ import { realtorsEmployees, cardTierPlans } from "@/data/portalData";
 import { useAuth } from "@/context/AuthContext";
 import { registerMember } from "@/lib/firebase/auth";
 import { updateProfile } from "firebase/auth";
-import { getNextEmployeeId, peekNextEmployeeId, saveMemberProfile, saveIdCardRecord } from "@/lib/firebase/db";
+import { getNextEmployeeId, peekNextEmployeeId, saveMemberProfile, saveIdCardRecord, MemberProfileData } from "@/lib/firebase/db";
 import { uploadMemberPhoto, compressImage } from "@/lib/firebase/storage";
 
 export interface IdCardModalProps {
@@ -39,6 +39,7 @@ export interface IdCardModalProps {
   onClose: () => void;
   initialEmployee?: RealtorsMediaEmployee;
   initialTier?: "green" | "blue" | "orange" | "red";
+  onProfileUpdated?: (profile: MemberProfileData) => void;
 }
 
 const EXPERIENCE_OPTIONS = [
@@ -78,9 +79,10 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   onClose,
   initialEmployee,
   initialTier = "green",
+  onProfileUpdated,
 }) => {
   const router = useRouter();
-  const { user, memberProfile, refreshProfile } = useAuth();
+  const { user, memberProfile, setMemberProfile, refreshProfile } = useAuth();
   const [selectedTier, setSelectedTier] = useState<"green" | "blue" | "orange" | "red">(initialTier);
 
   const getPrefix = (tier: "green" | "blue" | "orange" | "red") =>
@@ -490,45 +492,47 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           uid: newUser.uid,
         });
 
-        // Cache real member details in localStorage for immediate dashboard display
+        const memberPayload = {
+          name: formData.name,
+          fullName: formData.name,
+          employeeId: nextSequentialId,
+          phone: formData.mobile,
+          mobile: formData.mobile,
+          email: formData.email,
+          location: formData.location,
+          agencyName: formData.agencyName,
+          companyName: formData.agencyName,
+          licenseNumber: formData.licenseNumber,
+          experience: formData.experience,
+          specialization: formData.specialization,
+          photo: finalPhotoUrl,
+          photoUrl: finalPhotoUrl,
+          tier: tierKey,
+          selectedTier: tierKey,
+          designation: formData.designation || "VERIFIED REALTOR",
+          department: formData.department || "Property Sales & Channel",
+          issuedDate: profile.issuedDate || issuedDate,
+          validTill: profile.validTill || validTill,
+          verificationUrl: dynamicVerificationUrl,
+        };
+
         if (typeof window !== "undefined") {
-          const memberPayload = {
-            name: formData.name,
-            fullName: formData.name,
-            employeeId: nextSequentialId,
-            phone: formData.mobile,
-            mobile: formData.mobile,
-            email: formData.email,
-            location: formData.location,
-            agencyName: formData.agencyName,
-            companyName: formData.agencyName,
-            licenseNumber: formData.licenseNumber,
-            experience: formData.experience,
-            specialization: formData.specialization,
-            photo: finalPhotoUrl,
-            photoUrl: finalPhotoUrl,
-            tier: tierKey,
-            selectedTier: tierKey,
-            designation: formData.designation || "VERIFIED REALTOR",
-            department: formData.department || "Property Sales & Channel",
-            issuedDate: profile.issuedDate || issuedDate,
-            validTill: profile.validTill || validTill,
-            verificationUrl: dynamicVerificationUrl,
-          };
           localStorage.setItem("rm_last_member", JSON.stringify(memberPayload));
           localStorage.setItem("rm_member_profile", JSON.stringify(memberPayload));
         }
 
-        await refreshProfile();
+        setMemberProfile(memberPayload as any);
+        onProfileUpdated?.(memberPayload as any);
+        await refreshProfile(newUser);
         setFormData((prev) => ({ ...prev, employeeId: nextSequentialId, photo: finalPhotoUrl }));
         setIsGenerated(true);
-        setAuthSuccessMessage(`Member ID ${nextSequentialId} generated! Redirecting to Member Dashboard...`);
+        setAuthSuccessMessage(`Member ID ${nextSequentialId} generated! Updating Member Dashboard...`);
 
         // Automatically navigate user to member dashboard with the exact details entered!
         setTimeout(() => {
           onClose();
           router.push("/dashboard");
-        }, 1200);
+        }, 1000);
       } else {
         // User already logged in, update profile with sequential ID in Firestore
         const safeAuthPhotoUrl =
@@ -598,43 +602,46 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           uid: user.uid,
         });
 
+        const memberPayload = {
+          name: formData.name,
+          fullName: formData.name,
+          employeeId: nextSequentialId,
+          phone: formData.mobile,
+          mobile: formData.mobile,
+          email: formData.email || user.email,
+          location: formData.location,
+          agencyName: formData.agencyName,
+          companyName: formData.agencyName,
+          licenseNumber: formData.licenseNumber,
+          experience: formData.experience,
+          specialization: formData.specialization,
+          photo: finalPhotoUrl,
+          photoUrl: finalPhotoUrl,
+          tier: tierKey,
+          selectedTier: tierKey,
+          designation: formData.designation || "VERIFIED REALTOR",
+          department: formData.department || "Property Sales & Channel",
+          issuedDate,
+          validTill,
+          verificationUrl: dynamicVerificationUrl,
+        };
+
         if (typeof window !== "undefined") {
-          const memberPayload = {
-            name: formData.name,
-            fullName: formData.name,
-            employeeId: nextSequentialId,
-            phone: formData.mobile,
-            mobile: formData.mobile,
-            email: formData.email || user.email,
-            location: formData.location,
-            agencyName: formData.agencyName,
-            companyName: formData.agencyName,
-            licenseNumber: formData.licenseNumber,
-            experience: formData.experience,
-            specialization: formData.specialization,
-            photo: finalPhotoUrl,
-            photoUrl: finalPhotoUrl,
-            tier: tierKey,
-            selectedTier: tierKey,
-            designation: formData.designation || "VERIFIED REALTOR",
-            department: formData.department || "Property Sales & Channel",
-            issuedDate,
-            validTill,
-            verificationUrl: dynamicVerificationUrl,
-          };
           localStorage.setItem("rm_last_member", JSON.stringify(memberPayload));
           localStorage.setItem("rm_member_profile", JSON.stringify(memberPayload));
         }
 
-        await refreshProfile();
+        setMemberProfile(memberPayload as any);
+        onProfileUpdated?.(memberPayload as any);
+        await refreshProfile(user);
         setFormData((prev) => ({ ...prev, employeeId: nextSequentialId, photo: finalPhotoUrl }));
         setIsGenerated(true);
-        setAuthSuccessMessage(`ID Card ${nextSequentialId} updated! Redirecting to Member Dashboard...`);
+        setAuthSuccessMessage(`ID Card ${nextSequentialId} updated! Updating Member Dashboard...`);
 
         setTimeout(() => {
           onClose();
           router.push("/dashboard");
-        }, 1200);
+        }, 1000);
       }
     } catch (err: any) {
       console.error("ID Card generation error:", err);

@@ -395,13 +395,19 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         <div className="absolute left-[44px] top-[342px] z-10">
           <div className={`w-[185px] h-[198px] rounded-[22px] p-[3.5px] bg-gradient-to-br ${currentTheme.photoRing} shadow-md ${currentTheme.photoShadow}`}>
             <div className="relative w-full h-full rounded-[18px] overflow-hidden bg-white">
-              <Image
-                src={mergedEmployee.photo || "/images/rohan_deshmukh.png"}
-                alt={mergedEmployee.name}
-                fill
-                priority
-                sizes="200px"
-                className="object-cover object-center"
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={mergedEmployee.photo || (mergedEmployee as any).photoUrl || "/images/rohan_deshmukh.png"}
+                alt={mergedEmployee.name || "Member Photo"}
+                className="w-full h-full object-cover object-center"
+                crossOrigin="anonymous"
+                loading="eager"
+                onError={(e) => {
+                  const target = e.currentTarget;
+                  if (!target.src.includes("rohan_deshmukh.png")) {
+                    target.src = "/images/rohan_deshmukh.png";
+                  }
+                }}
               />
             </div>
           </div>
