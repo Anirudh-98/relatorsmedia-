@@ -456,15 +456,11 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           <div
             className={`text-[16px] font-black uppercase tracking-[0.14em] mt-1.5 mb-4 leading-tight truncate flex items-center gap-1.5 ${currentTheme.designationColor}`}
           >
-            {(
-              (mergedEmployee.agencyName || mergedEmployee.designation || "")
-                .toUpperCase()
-                .includes("VERIFIED REALTOR")
-            ) && <VerifiedCheckBigIcon size={14} />}
             <span className="truncate">
-              {mergedEmployee.agencyName
-                ? `${mergedEmployee.agencyName}`
-                : mergedEmployee.designation}
+              {mergedEmployee.specialization
+                || mergedEmployee.agencyName
+                || mergedEmployee.designation
+                || ""}
             </span>
           </div>
 
