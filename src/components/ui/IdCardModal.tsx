@@ -48,6 +48,12 @@ export interface IdCardModalProps {
   initialEmployee?: RealtorsMediaEmployee;
   initialTier?: "green" | "blue" | "orange" | "red";
   onProfileUpdated?: (profile: MemberProfileData) => void;
+  /**
+   * "self": the logged-in member edits their own card (dashboard).
+   * "issue" (default): a fresh generator that issues a new card for someone else and never
+   * reads from or writes to the logged-in account (e.g. an admin generating cards).
+   */
+  mode?: "self" | "issue";
 }
 
 const EXPERIENCE_OPTIONS = [
@@ -97,18 +103,23 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   initialEmployee,
   initialTier = "green",
   onProfileUpdated,
+  mode = "issue",
 }) => {
-  const { user, memberProfile, setMemberProfile, refreshProfile } = useAuth();
+  const { user, memberProfile: authProfile, setMemberProfile, refreshProfile } = useAuth();
+  const isSelfMode = mode === "self" && !!user;
+  // In issue mode the generator starts blank: the logged-in account's card must never leak into it
+  const memberProfile = isSelfMode ? authProfile : null;
+  const selfUser = isSelfMode ? user : null;
   const [selectedTier, setSelectedTier] = useState<TierKey>(normalizeTier(initialTier));
 
   const buildInitialForm = () => ({
     name:
       initialEmployee?.name ||
       memberProfile?.fullName ||
-      (user?.displayName && user.displayName !== "Verified Member" ? user.displayName : "") ||
+      (selfUser?.displayName && selfUser.displayName !== "Verified Member" ? selfUser.displayName : "") ||
       "",
     mobile: initialEmployee?.phone || memberProfile?.phone || memberProfile?.mobile || "",
-    email: initialEmployee?.email || memberProfile?.email || user?.email || "",
+    email: initialEmployee?.email || memberProfile?.email || selfUser?.email || "",
     location:
       initialEmployee?.location ||
       memberProfile?.location ||
@@ -123,7 +134,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     experience: initialEmployee?.experience || memberProfile?.experience || memberProfile?.experienceYears || "",
     specialization: initialEmployee?.specialization || memberProfile?.specialization || "Residential Properties",
     // Never pre-fill a placeholder photo: a real photo is mandatory for the card
-    photo: initialEmployee?.photo || memberProfile?.photoUrl || memberProfile?.photo || user?.photoURL || "",
+    photo: initialEmployee?.photo || memberProfile?.photoUrl || memberProfile?.photo || selfUser?.photoURL || "",
     employeeId: initialEmployee?.employeeId || memberProfile?.employeeId || "",
     issuedDate: initialEmployee?.issuedDate || memberProfile?.issuedDate || "",
     validTill: initialEmployee?.validTill || memberProfile?.validTill || "",
@@ -421,7 +432,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       return;
     }
 
-    if (!user) {
+    if (!isSelfMode) {
       if (!formData.password) {
         setAuthError("Please enter Create Password to activate your member login.");
         return;
@@ -448,7 +459,9 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       let savedProfile: MemberProfileData;
       let isUpdate = false;
 
-      if (!user) {
+      const issuedForSomeoneElse = !isSelfMode && !!user;
+
+      if (!isSelfMode || !user) {
         // registerMember creates the login, uploads the photo once authenticated, assigns the
         // Member ID (reusing the existing one if this email already has a card for this tier)
         // and saves both the `members` and `idCards` records.
@@ -470,6 +483,8 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           photoDataUrlOrFile: formData.photo,
           department,
           designation,
+          // An admin/member issuing a card for someone else must stay logged in as themselves
+          keepCurrentSession: issuedForSomeoneElse,
         });
         savedProfile = profile;
       } else {
@@ -572,11 +587,13 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         }
       }
 
-      if (typeof window !== "undefined") {
-        localStorage.setItem("rm_member_profile", JSON.stringify(savedProfile));
+      // Only update the signed-in session when the card belongs to the signed-in member
+      if (!issuedForSomeoneElse) {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("rm_member_profile", JSON.stringify(savedProfile));
+        }
+        setMemberProfile(savedProfile);
       }
-
-      setMemberProfile(savedProfile);
       onProfileUpdated?.(savedProfile);
       previewRequestRef.current++;
       setFormData((prev) => ({
@@ -595,7 +612,9 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           : `✓ Official Member ID ${savedProfile.employeeId} generated and saved to realtime database!`
       );
       // Sync with Firestore in the background; the saved profile is already shown
-      refreshProfile().catch(() => {});
+      if (!issuedForSomeoneElse) {
+        refreshProfile().catch(() => {});
+      }
     } catch (err: any) {
       console.error("ID Card generation error:", err);
       let msg = "Could not complete registration. Please check your details.";
@@ -1061,7 +1080,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
               </div>
 
               {/* Create Password & Confirm Password (only when creating a new member login) */}
-              {!user && (
+              {!isSelfMode && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
@@ -1070,7 +1089,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     <div className="relative">
                       <input
                         type={showPassword ? "text" : "password"}
-                        required={!user}
+                        required
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         placeholder="Min. 6 characters"
@@ -1093,7 +1112,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     </label>
                     <input
                       type={showPassword ? "text" : "password"}
-                      required={!user}
+                      required
                       value={formData.confirmPassword}
                       onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                       placeholder="Re-enter password"
@@ -1287,14 +1306,17 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                       <FaPrint className="text-[10px]" />
                       <span>Print (86x54mm)</span>
                     </button>
-                    <Link
-                      href="/dashboard"
-                      onClick={() => onClose()}
-                      className="bg-white hover:bg-gray-50 text-[#073F73] border border-[#CBD5E1] text-[11px] font-bold px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
-                    >
-                      <span>Go to Dashboard</span>
-                      <FaArrowRight className="text-[10px]" />
-                    </Link>
+                    {/* The dashboard shows the signed-in account, not a card issued for someone else */}
+                    {(isSelfMode || !user) && (
+                      <Link
+                        href="/dashboard"
+                        onClick={() => onClose()}
+                        className="bg-white hover:bg-gray-50 text-[#073F73] border border-[#CBD5E1] text-[11px] font-bold px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      >
+                        <span>Go to Dashboard</span>
+                        <FaArrowRight className="text-[10px]" />
+                      </Link>
+                    )}
                   </div>
                 </div>
               )}

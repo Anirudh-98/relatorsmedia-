@@ -281,15 +281,15 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
 
           {/* All background paths clipped to exact equal corner radius */}
           <g clipPath={`url(#${gradientPrefix}-cardEqualClip)`}>
-            {/* TOP HEADER THEMED BACKGROUND */}
+            {/* TOP HEADER THEMED BACKGROUND — dips lower on left for logo placement */}
             <path
-              d="M 0 0 L 638 0 L 638 288 C 470 293 230 251 0 240 Z"
+              d="M 0 0 L 638 0 L 638 220 C 470 220 200 255 0 265 Z"
               fill={`url(#${gradientPrefix}-topNavyGrad)`}
             />
 
             {/* TOP GOLDEN CURVED RIBBON */}
             <path
-              d="M 0 240 C 230 251 470 293 638 288 L 638 296 C 470 301 230 259 0 248 Z"
+              d="M 0 265 C 200 255 470 220 638 220 L 638 229 C 470 229 200 264 0 274 Z"
               fill={`url(#${gradientPrefix}-topGoldGrad)`}
             />
 
@@ -308,66 +308,63 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </svg>
 
         {/* ========================================================
-            2. TOP BRANDING / HEADER AREA
+            2. TOP BRANDING / HEADER AREA (no logo inside — logo is below curve)
            ======================================================== */}
-        <div className="relative z-10 w-full pt-4 px-7 flex items-start">
-          {/* LEFT: EMBLEM & BRANDING (full width now) */}
-          <div className="flex items-center gap-4 w-full">
-            {/* Realtors Media Official Logo */}
-            <div className="relative w-[148px] h-[126px] flex-shrink-0 flex items-center justify-center">
-              <div className="relative w-full h-full">
-                <Image
-                  src="/idcard-logo.png"
-                  alt="Realtors Media Logo"
-                  fill
-                  sizes="300px"
-                  className="object-contain"
-                  priority
-                  unoptimized
-                />
-              </div>
-            </div>
-
-            {/* Brand Titles */}
-            <div className="flex flex-col justify-center flex-1">
-              <div className="flex items-baseline leading-none">
-                <span className="text-white font-extrabold text-[42px] tracking-tight">
-                  Realtors
-                </span>
-                <span
-                  className="font-black text-[42px] tracking-tight ml-1"
-                  style={{ color: currentTheme.brandMediaColor }}
-                >
-                  Media
-                </span>
-              </div>
-
-              {/* Sub-label: — DIGITAL — */}
-              <div className="flex items-center gap-2.5 mt-2">
-                <div className="h-[1.5px] w-8 bg-white/50" />
-                <span className="text-white/95 text-[16px] font-black uppercase tracking-[0.28em] leading-none">
-                  DIGITAL
-                </span>
-                <div className="h-[1.5px] w-8 bg-white/50" />
-              </div>
-
-              {/* India's Real Estate Media Platform */}
-              <span
-                className="text-[18px] font-bold tracking-wide mt-2 leading-none whitespace-nowrap"
-                style={{ color: currentTheme.platformSubtext }}
-              >
-                India&apos;s Real Estate Media Platform
+        <div className="relative z-10 w-full pt-4 px-7 flex items-start justify-between">
+          {/* Brand Titles */}
+          <div className="flex flex-col justify-center pt-1">
+            <div className="flex items-baseline leading-none">
+              <span className="text-white font-extrabold text-[42px] tracking-tight">
+                Realtors
               </span>
-
-              {/* People · Properties · Possibilities — single row */}
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-[16px] font-bold leading-none whitespace-nowrap" style={{ color: currentTheme.taglines }}>People</span>
-                <span className="text-[14px] font-bold" style={{ color: currentTheme.taglines }}>·</span>
-                <span className="text-[16px] font-bold leading-none whitespace-nowrap" style={{ color: currentTheme.taglines }}>Properties</span>
-                <span className="text-[14px] font-bold" style={{ color: currentTheme.taglines }}>·</span>
-                <span className="text-[16px] font-bold leading-none whitespace-nowrap" style={{ color: currentTheme.taglines }}>Possibilities</span>
-              </div>
+              <span
+                className="font-black text-[42px] tracking-tight ml-1"
+                style={{ color: currentTheme.brandMediaColor }}
+              >
+                Media
+              </span>
             </div>
+
+            {/* Sub-label: — DIGITAL — */}
+            <div className="flex items-center gap-2.5 mt-2">
+              <div className="h-[1.5px] w-8 bg-white/50" />
+              <span className="text-white/95 text-[16px] font-black uppercase tracking-[0.28em] leading-none">
+                DIGITAL
+              </span>
+              <div className="h-[1.5px] w-8 bg-white/50" />
+            </div>
+
+            {/* India's Real Estate Media Platform */}
+            <span
+              className="text-[18px] font-bold tracking-wide mt-2 leading-none whitespace-nowrap"
+              style={{ color: currentTheme.platformSubtext }}
+            >
+              India&apos;s Real Estate Media Platform
+            </span>
+          </div>
+
+          {/* RIGHT: People / Properties / Possibilities — vertical stack */}
+          <div className={`text-right border-r-[2.5px] ${currentTheme.taglineBorder} pr-3.5 mt-1`}>
+            <div className="text-[21px] font-bold leading-[1.36]" style={{ color: currentTheme.taglines }}>People</div>
+            <div className="text-[21px] font-bold leading-[1.36]" style={{ color: currentTheme.taglines }}>Properties</div>
+            <div className="text-[21px] font-bold leading-[1.36]" style={{ color: currentTheme.taglines }}>Possibilities</div>
+          </div>
+        </div>
+
+        {/* ========================================================
+            LOGO — placed OUTSIDE the header curve, on white background
+           ======================================================== */}
+        <div className="absolute left-[20px] top-[205px] z-20 w-[155px] h-[145px] bg-white rounded-[20px] shadow-lg border border-[#E2E8F0] flex items-center justify-center p-2">
+          <div className="relative w-full h-full">
+            <Image
+              src="/idcard-logo.png"
+              alt="Realtors Media Logo"
+              fill
+              sizes="300px"
+              className="object-contain"
+              priority
+              unoptimized
+            />
           </div>
         </div>
 
@@ -390,9 +387,9 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             4. EMPLOYEE PHOTO & IDENTITY (LEFT COLUMN)
            ======================================================== */}
-        {/* Photo Container */}
-        <div className="absolute left-[44px] top-[295px] z-10">
-          <div className={`w-[185px] h-[198px] rounded-[22px] p-[3.5px] bg-gradient-to-br ${currentTheme.photoRing} shadow-md ${currentTheme.photoShadow}`}>
+        {/* Photo Container — sits below the logo */}
+        <div className="absolute left-[20px] top-[375px] z-10">
+          <div className={`w-[175px] h-[185px] rounded-[22px] p-[3.5px] bg-gradient-to-br ${currentTheme.photoRing} shadow-md ${currentTheme.photoShadow}`}>
             <div className="relative w-full h-full rounded-[18px] overflow-hidden bg-white">
               {(() => {
                 const rawPhoto =
@@ -429,7 +426,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             UNIQUE BARCODE (TOP RIGHT SIDE OF IMAGE) - ONLY BARCODE
            ======================================================== */}
-        <div className="absolute right-[44px] top-[300px] z-10 w-[240px] h-[60px] flex items-center justify-center">
+        <div className="absolute right-[44px] top-[295px] z-10 w-[240px] h-[60px] flex items-center justify-center">
           <BarcodeSVG
             value={mergedEmployee.employeeId}
             className="w-full h-full"
@@ -438,7 +435,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* Employee Identity & Information Grid (Unified Flow) */}
-        <div className="absolute left-[44px] top-[505px] z-10 w-[325px] flex flex-col">
+        <div className="absolute left-[20px] top-[577px] z-10 w-[335px] flex flex-col">
           {/* Subtle Tier Badge */}
           <div className="mb-1.5 flex items-center">
             <span
@@ -522,7 +519,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             6. AUTHORIZED SIGNATORY (BOTTOM LEFT)
            ======================================================== */}
-        <div className="absolute left-[44px] top-[790px] z-10 w-[185px]">
+        <div className="absolute left-[20px] top-[800px] z-10 w-[200px]">
           <div className="w-full h-[1.5px] bg-[#94A3B8] mb-1.5" />
           <div className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider leading-none">
             Authorized Signature
@@ -532,7 +529,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             7. RIGHT PROMOTIONAL SECTION: BUILDING BETTER COMMUNITIES
            ======================================================== */}
-        <div className="absolute right-[44px] top-[390px] z-10 text-right w-[240px]">
+        <div className="absolute right-[44px] top-[375px] z-10 text-right w-[240px]">
           <div className={`text-[22px] font-black uppercase leading-[1.18] tracking-tight ${currentTheme.promoTitleColor}`}>
             BUILDING
             <br />

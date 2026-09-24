@@ -414,6 +414,7 @@ export default function DashboardPage() {
         onClose={() => setIsIdModalOpen(false)}
         initialEmployee={isProfileComplete ? currentEmployee : undefined}
         initialTier={resolvedTier}
+        mode="self"
       />
     </PortalLayout>
   );

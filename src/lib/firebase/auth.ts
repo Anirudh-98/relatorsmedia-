@@ -7,8 +7,12 @@ import {
   User,
   onAuthStateChanged,
   NextOrObserver,
+  Auth,
+  initializeAuth,
+  inMemoryPersistence,
 } from "firebase/auth";
-import { auth } from "./config";
+import { initializeApp, getApps } from "firebase/app";
+import { auth, firebaseConfig } from "./config";
 import {
   saveMemberProfile,
   getMemberProfile,
@@ -41,6 +45,26 @@ export interface RegisterMemberParams {
   employeeId?: string;
   department?: string;
   designation?: string;
+  /**
+   * Create the member's account without touching the current browser session
+   * (used when an admin issues a card for someone else).
+   */
+  keepCurrentSession?: boolean;
+}
+
+let isolatedAuth: Auth | null = null;
+
+/**
+ * A separate Firebase Auth instance with in-memory persistence. Creating a user on it
+ * does not sign out (or replace) whoever is logged in on the main `auth` instance.
+ */
+function getIsolatedAuth(): Auth {
+  if (!isolatedAuth) {
+    const appName = "member-registration";
+    const app = getApps().find((a) => a.name === appName) || initializeApp(firebaseConfig, appName);
+    isolatedAuth = initializeAuth(app, { persistence: inMemoryPersistence });
+  }
+  return isolatedAuth;
 }
 
 /**
@@ -49,15 +73,16 @@ export interface RegisterMemberParams {
  */
 export async function registerMember(params: RegisterMemberParams): Promise<{ user: User; profile: MemberProfileData }> {
   // 1. Create Firebase Auth user or sign in if already exists
+  const targetAuth = params.keepCurrentSession ? getIsolatedAuth() : auth;
   let user: User;
   let existingProfile: MemberProfileData | null = null;
   try {
-    const userCredential = await createUserWithEmailAndPassword(auth, params.email, params.password);
+    const userCredential = await createUserWithEmailAndPassword(targetAuth, params.email, params.password);
     user = userCredential.user;
   } catch (authErr: any) {
     if (authErr?.code === "auth/email-already-in-use") {
       try {
-        const signInCredential = await signInWithEmailAndPassword(auth, params.email, params.password);
+        const signInCredential = await signInWithEmailAndPassword(targetAuth, params.email, params.password);
         user = signInCredential.user;
         existingProfile = await getMemberProfile(user.uid, user.email).catch(() => null);
       } catch (signInErr: any) {
@@ -207,6 +232,10 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     await retireIdCardRecord(existingEmpId, generatedEmpId).catch((err) =>
       console.warn("Could not retire previous ID card:", err)
     );
+  }
+
+  if (params.keepCurrentSession) {
+    await signOut(targetAuth).catch(() => {});
   }
 
   return { user, profile: profileData };

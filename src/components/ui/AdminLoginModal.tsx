@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { FaShieldAlt, FaLock, FaTimes, FaSpinner, FaExclamationTriangle, FaEye, FaEyeSlash } from "react-icons/fa";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 
 export interface AdminLoginModalProps {
@@ -36,12 +36,20 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       // Verify that this user is the authorized admin
       const authorizedAdmin = "admin@relatormedia.com";
       if (loggedUser.email?.toLowerCase().trim() !== authorizedAdmin.toLowerCase()) {
-        setError(`Access Denied: ${loggedUser.email} is not authorized. Please log in with ${authorizedAdmin}.`);
+        // Sign them back out — wrong account
+        await signOut(auth);
+        setError(`Access Denied: Only the authorized administrator account can access this.`);
         setLoading(false);
         return;
       }
 
-      // Success - grant access to ID Card generator
+      // ✅ Immediately sign out so AuthContext does NOT redirect to dashboard.
+      // We only needed Firebase to verify the password — we don't want a persistent session.
+      await signOut(auth);
+
+      // Store a session-level flag so the parent knows admin is verified
+      sessionStorage.setItem("rm_admin_verified", "true");
+
       setPassword("");
       setError(null);
       onSuccess();
