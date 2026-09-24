@@ -4,11 +4,17 @@ import React, { useState } from "react";
 import { FaIdCard, FaCheckCircle, FaStar, FaShieldAlt } from "react-icons/fa";
 import { RealtorsMediaIdCard } from "@/components/ui/RealtorsMediaIdCard";
 import { IdCardModal } from "@/components/ui/IdCardModal";
+import { AdminLoginModal } from "@/components/ui/AdminLoginModal";
 import { realtorsEmployees } from "@/data/portalData";
 import { RealtorsMediaEmployee } from "@/types";
+import { useAuth } from "@/context/AuthContext";
 
 export const UniqueIdCards: React.FC = () => {
+  const { user } = useAuth();
+  const isAdmin = user?.email?.toLowerCase().trim() === "admin@relatormedia.com";
+
   const [selectedTier, setSelectedTier] = useState<"green" | "blue" | "orange">("blue");
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
 
   const empGreen =
     realtorsEmployees.find((e) => e.theme === "green") || realtorsEmployees[0];
@@ -28,12 +34,23 @@ export const UniqueIdCards: React.FC = () => {
   );
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // When user clicks any of the three cards: select it and automatically open popup form!
+  // When user clicks any of the three cards: verify admin login before opening ID generator
   const handleSelectCardTier = (tierTheme: "green" | "blue" | "orange") => {
     setSelectedTier(tierTheme);
     setSelectedEmployee(getEmpForTier(tierTheme));
-    // Automatically open the popup form modal!
-    setIsModalOpen(true);
+    if (isAdmin) {
+      setIsModalOpen(true);
+    } else {
+      setIsAdminModalOpen(true);
+    }
+  };
+
+  const handleOpenGenerator = () => {
+    if (isAdmin) {
+      setIsModalOpen(true);
+    } else {
+      setIsAdminModalOpen(true);
+    }
   };
 
   return (
@@ -206,7 +223,7 @@ export const UniqueIdCards: React.FC = () => {
         {/* Full-width CTA Button */}
         <button
           type="button"
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenGenerator}
           className="w-full mt-1 bg-[#EA580C] hover:bg-[#D94F04] text-white text-[9px] sm:text-[9.5px] font-black py-1 px-1.5 rounded-[3px] transition-colors flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer shadow-xs"
         >
           <FaStar className="text-[8.5px] text-yellow-300" />
@@ -214,6 +231,16 @@ export const UniqueIdCards: React.FC = () => {
           <span className="text-[9.5px]">→</span>
         </button>
       </div>
+
+      {/* Admin Login Verification Modal */}
+      <AdminLoginModal
+        isOpen={isAdminModalOpen}
+        onClose={() => setIsAdminModalOpen(false)}
+        onSuccess={() => {
+          setIsAdminModalOpen(false);
+          setIsModalOpen(true);
+        }}
+      />
 
       {/* High-Resolution Modal Preview & Details Registration Dialog */}
       <IdCardModal

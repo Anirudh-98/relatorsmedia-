@@ -523,13 +523,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         await refreshProfile(newUser);
         setFormData((prev) => ({ ...prev, employeeId: nextSequentialId, photo: finalPhotoUrl }));
         setIsGenerated(true);
-        setAuthSuccessMessage(`Member ID ${nextSequentialId} generated! Updating Member Dashboard...`);
-
-        // Automatically navigate user to member dashboard with the exact details entered!
-        setTimeout(() => {
-          onClose();
-          router.push("/dashboard");
-        }, 1000);
+        setAuthSuccessMessage(`✓ Official Member ID ${nextSequentialId} generated and saved to realtime database!`);
       } else {
         // User already logged in, update profile with sequential ID in Firestore
         const safeAuthPhotoUrl =
@@ -633,12 +627,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         await refreshProfile(user);
         setFormData((prev) => ({ ...prev, employeeId: nextSequentialId, photo: finalPhotoUrl }));
         setIsGenerated(true);
-        setAuthSuccessMessage(`ID Card ${nextSequentialId} updated! Updating Member Dashboard...`);
-
-        setTimeout(() => {
-          onClose();
-          router.push("/dashboard");
-        }, 1000);
+        setAuthSuccessMessage(`✓ Official ID Card ${nextSequentialId} updated and saved to realtime database!`);
       }
     } catch (err: any) {
       console.error("ID Card generation error:", err);
@@ -1293,23 +1282,39 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
               {/* Success Notification & Portal Link */}
               {isGenerated && (
-                <div className="p-3 bg-[#ECFDF5] border border-[#A7F3D0] rounded-md space-y-2.5 text-[11.5px] text-[#065F46] animate-fade-in">
-                  <div className="flex items-center gap-2 font-black">
-                    <FaCheck className="text-[#059669] text-base flex-shrink-0" />
-                    <span>{authSuccessMessage || `ID Card & Member Login Created Successfully! Assigned ID: ${formData.employeeId}`}</span>
+                <div className="p-3.5 bg-[#ECFDF5] border border-[#10B981] rounded-lg space-y-2 text-[12px] text-[#065F46] animate-fade-in shadow-xs">
+                  <div className="flex items-center gap-2 font-black text-sm">
+                    <FaCheck className="text-[#059669] text-base shrink-0" />
+                    <span>{authSuccessMessage || `ID Card & Member Record Created Successfully! Assigned ID: ${formData.employeeId}`}</span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#A7F3D0]/60">
+                  <p className="text-[11px] text-[#047857] font-medium leading-relaxed">
+                    Your official CR80 card is active in the database. You can now download the high-resolution PNG, print, or review the card on the right.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#A7F3D0]">
+                    <button
+                      type="button"
+                      onClick={handleDownloadPng}
+                      className="bg-[#059669] hover:bg-[#047857] text-white text-[11px] font-black px-3.5 py-1.5 rounded transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                    >
+                      <FaDownload className="text-[10px]" />
+                      <span>Download ID Card PNG</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handlePrint}
+                      className="bg-[#0284C7] hover:bg-[#0369A1] text-white text-[11px] font-black px-3.5 py-1.5 rounded transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                    >
+                      <FaPrint className="text-[10px]" />
+                      <span>Print (86x54mm)</span>
+                    </button>
                     <Link
                       href="/dashboard"
                       onClick={() => onClose()}
-                      className="bg-[#073F73] hover:bg-[#052E54] text-white text-[11px] font-black px-3.5 py-1.5 rounded transition-colors inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                      className="bg-white hover:bg-gray-50 text-[#073F73] border border-[#CBD5E1] text-[11px] font-bold px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1.5 shadow-2xs cursor-pointer"
                     >
-                      <span>Go to Member Dashboard & View ID Card</span>
+                      <span>Go to Dashboard</span>
                       <FaArrowRight className="text-[10px]" />
                     </Link>
-                    <span className="text-[10px] text-gray-600 font-medium">
-                      Your ID card is now live in your personal Member Portal.
-                    </span>
                   </div>
                 </div>
               )}

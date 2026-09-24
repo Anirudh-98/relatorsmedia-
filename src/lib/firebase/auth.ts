@@ -62,7 +62,7 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
   const generatedEmpId = params.employeeId || (await getNextEmployeeId(params.selectedTier));
 
   // 3. Upload photo to Firebase Storage if provided
-  let photoUrl = "/images/realtor_ramnath.jpg";
+  let photoUrl = "";
   if (params.photoDataUrlOrFile) {
     try {
       photoUrl = await uploadMemberPhoto(params.photoDataUrlOrFile, user.uid);

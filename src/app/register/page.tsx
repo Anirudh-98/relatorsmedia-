@@ -210,7 +210,7 @@ export default function RegisterPage() {
     issuedDate: "24 SEP 2026",
     validTill: "23 SEP 2028",
     photo: formData.photo || "/images/rohan_deshmukh.png",
-    verificationUrl: `https://realtorsmedia.com/verify/${previewId}`,
+    verificationUrl: `https://www.realtorsmedia.world/verify/${previewId}`,
     theme: selectedTier === "orange" ? "red" : selectedTier,
     phone: `+91 ${formData.phone}`,
     email: formData.email,
@@ -277,41 +277,102 @@ export default function RegisterPage() {
       breadcrumbs={[{ label: "Register" }]}
     >
       {registeredSuccess ? (
-        <div className="max-w-2xl mx-auto bg-white border border-[#A3D9B1] rounded-[4px] p-6 sm:p-8 text-center shadow-md space-y-4">
-          <div className="w-16 h-16 bg-[#E7F6EA] text-[#168A3A] rounded-full flex items-center justify-center mx-auto text-3xl">
-            <FaCheckCircle />
-          </div>
-          <span className="bg-[#E7F6EA] text-[#168A3A] text-[11px] font-black px-3 py-1 rounded-full uppercase">
-            Enrollment Completed
-          </span>
-          <h2 className="text-xl sm:text-2xl font-black text-[#073F73]">
-            Welcome to Realtors Media, {formData.fullName}!
-          </h2>
-          <p className="text-[13px] text-gray-600 max-w-md mx-auto leading-relaxed">
-            Your registration is approved. Your official verified identity credentials have been generated:
-          </p>
-
-          <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded-[4px] inline-block text-left my-2">
-            <div className="text-[12px] text-gray-500 font-semibold">Your Registered Member ID:</div>
-            <div className="text-xl font-black text-[#073F73] tracking-widest">{generatedEmpId}</div>
-            <div className="text-[11px] text-emerald-700 font-bold mt-1">
-              ✓ CR80 Digital Identity Card Activated
+        <div className="max-w-4xl mx-auto bg-white border border-[#A3D9B1] rounded-lg p-6 sm:p-8 shadow-md space-y-6">
+          <div className="bg-[#E7F6EA] border border-[#A3D9B1] p-5 rounded-lg text-center space-y-2">
+            <div className="w-14 h-14 bg-[#168A3A] text-white rounded-full flex items-center justify-center mx-auto text-2xl shadow-sm">
+              <FaCheckCircle />
             </div>
+            <span className="bg-white text-[#168A3A] text-[11px] font-black px-3 py-1 rounded-full uppercase tracking-wider border border-[#A3D9B1] inline-block">
+              ✓ Registration & ID Card Creation Successful
+            </span>
+            <h2 className="text-xl sm:text-2xl font-black text-[#073F73]">
+              Welcome to Realtors Media, {formData.fullName}!
+            </h2>
+            <p className="text-[13px] text-gray-700 max-w-xl mx-auto leading-relaxed">
+              Your official CR80 Identity Card and Member Profile have been saved to the realtime database.
+            </p>
           </div>
 
-          <div className="flex flex-col sm:flex-row justify-center gap-3 pt-3">
-            <Link
-              href={`/verify/${generatedEmpId}`}
-              className="bg-[#073F73] hover:bg-[#06345F] text-white text-[12px] font-black uppercase px-6 py-2.5 rounded-[3px] transition-colors"
-            >
-              View Public Verification Profile
-            </Link>
-            <Link
-              href="/dashboard"
-              className="bg-[#E21F2F] hover:bg-[#c91826] text-white text-[12px] font-black uppercase px-6 py-2.5 rounded-[3px] transition-colors"
-            >
-              Access Member Dashboard →
-            </Link>
+          {/* Side-by-side ID Card and Details */}
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-center pt-2">
+            {/* Left: ID Card Showcase */}
+            <div className="md:col-span-5 flex flex-col items-center">
+              <RealtorsMediaIdCard
+                employee={{
+                  name: formData.fullName,
+                  designation:
+                    memberType === "realtor"
+                      ? "VERIFIED REALTOR"
+                      : memberType === "builder"
+                      ? "BUILDER / DEVELOPER"
+                      : "INDUSTRY PROFESSIONAL",
+                  employeeId: generatedEmpId,
+                  department:
+                    memberType === "realtor"
+                      ? "Property Brokerage Cell"
+                      : memberType === "builder"
+                      ? "Developer Projects Wing"
+                      : "Allied Services Cell",
+                  location: `${formData.city || "City"}, ${formData.state || "State"}`,
+                  issuedDate: "Active",
+                  validTill: "Valid 2 Years",
+                  photo: formData.photo,
+                  verificationUrl: `https://www.realtorsmedia.world/verify/${generatedEmpId}`,
+                  theme: selectedTier === "orange" ? "red" : selectedTier,
+                  phone: formData.phone,
+                  email: formData.email,
+                  reraNumber: formData.reraNo,
+                  agencyName: formData.companyName,
+                }}
+                theme={selectedTier === "orange" ? "red" : selectedTier}
+                width={300}
+                className="shadow-2xl rounded-lg"
+              />
+              <span className="text-[11px] font-bold text-gray-500 mt-2.5">
+                Official {selectedTier.toUpperCase()} Member ID Card (86mm x 54mm)
+              </span>
+            </div>
+
+            {/* Right: Verified Credentials and Actions */}
+            <div className="md:col-span-7 space-y-4">
+              <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4.5 rounded-lg space-y-2.5 text-[12.5px]">
+                <div className="flex justify-between py-1 border-b border-gray-200">
+                  <span className="text-gray-500 font-semibold">Member ID (Assigned):</span>
+                  <strong className="text-[#073F73] font-black text-base">{generatedEmpId}</strong>
+                </div>
+                <div className="flex justify-between py-1 border-b border-gray-200">
+                  <span className="text-gray-500 font-semibold">Registered Full Name:</span>
+                  <strong className="text-gray-800 font-bold">{formData.fullName}</strong>
+                </div>
+                <div className="flex justify-between py-1 border-b border-gray-200">
+                  <span className="text-gray-500 font-semibold">Mobile Number:</span>
+                  <strong className="text-gray-800 font-bold">{formData.phone}</strong>
+                </div>
+                <div className="flex justify-between py-1 border-b border-gray-200">
+                  <span className="text-gray-500 font-semibold">Registered Email:</span>
+                  <strong className="text-gray-800">{formData.email}</strong>
+                </div>
+                <div className="flex justify-between py-1">
+                  <span className="text-gray-500 font-semibold">Operational Location:</span>
+                  <strong className="text-gray-800">{formData.city}, {formData.state || "India"}</strong>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <Link
+                  href={`/verify/${generatedEmpId}`}
+                  className="flex-1 bg-[#073F73] hover:bg-[#06345F] text-white text-[12px] font-black uppercase py-2.5 px-4 rounded text-center transition-colors shadow-xs"
+                >
+                  Verify ID Card Online →
+                </Link>
+                <Link
+                  href="/dashboard"
+                  className="flex-1 bg-[#168A3A] hover:bg-[#126f2f] text-white text-[12px] font-black uppercase py-2.5 px-4 rounded text-center transition-colors shadow-xs"
+                >
+                  Access Member Dashboard →
+                </Link>
+              </div>
+            </div>
           </div>
         </div>
       ) : (

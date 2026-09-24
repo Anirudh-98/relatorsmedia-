@@ -409,7 +409,11 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
                     src={displayPhoto}
                     alt={mergedEmployee.name || "Member Photo"}
                     className="w-full h-full object-cover object-center"
-                    crossOrigin="anonymous"
+                    crossOrigin={
+                      displayPhoto.startsWith("http://") || displayPhoto.startsWith("https://")
+                        ? "anonymous"
+                        : undefined
+                    }
                     loading="eager"
                     onError={(e) => {
                       const target = e.currentTarget;
@@ -623,7 +627,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           <div className="flex items-center justify-between text-[11px] font-bold tracking-wide">
             <div className="flex items-center gap-2 min-w-0">
               <FaMapMarkerAlt className="text-[#F5BF4B] text-[12.5px] shrink-0" />
-              <span className="truncate">Archana Arcade IT Complex , South Block, 407</span>
+              <span className="truncate">Archana Arcade IT Complex - South Block, 407</span>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
               <FaPhoneAlt className="text-[#F5BF4B] text-[10.5px] shrink-0" />
