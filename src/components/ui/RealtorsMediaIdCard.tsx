@@ -20,58 +20,55 @@ export interface RealtorsMediaIdCardProps {
 }
 
 const DEFAULT_EMPLOYEE: RealtorsMediaEmployee = {
-  name: "Rohan Deshmukh",
-  designation: "MEDIA EXECUTIVE",
-  employeeId: "RM-B-1111",
-  department: "Media & Marketing",
-  location: "Pune, Maharashtra",
-  issuedDate: "01 AUG 2026",
-  validTill: "31 JUL 2028",
-  photo: "/images/rohan_deshmukh.png",
-  verificationUrl: "https://realtorsmedia.com/verify/RM-B-1111",
-  theme: "blue",
+  name: "Ravi Varma",
+  designation: "VIP ELITE PARTNER",
+  employeeId: "RM-A-1116",
+  department: "All Properties",
+  specialization: "All Properties",
+  location: "Hyderabad",
+  issuedDate: "01 JAN 2026",
+  validTill: "31 Dec 2028",
+  photo: "/images/ravi_varma.jpg",
+  verificationUrl: "https://www.realtorsmedia.world/verify/RM-A-1116",
+  theme: "orange",
 };
 
-// CR80 portrait canvas (54mm × 86mm → ratio ≈ 1.5925)
+// CR80 portrait canvas (54mm × 85.6mm → ratio ≈ 1.5925)
 const CANVAS_WIDTH = 638;
 const CANVAS_HEIGHT = 1016;
 
 const THEME_CONFIGS = {
-  blue: {
-    gradStart: "#04244A",
-    gradMid: "#073A72",
-    gradEnd: "#0C5696",
-    badgeBg: "#073A72",
-    badgeText: "EXECUTIVE MEMBER",
-    nameColor: "#073A72",
-    accentColor: "#0C5696",
-  },
-  green: {
-    gradStart: "#042F24",
-    gradMid: "#065F46",
-    gradEnd: "#047857",
-    badgeBg: "#065F46",
-    badgeText: "VERIFIED REALTOR",
-    nameColor: "#065F46",
-    accentColor: "#047857",
-  },
   orange: {
-    gradStart: "#7C2D12",
-    gradMid: "#C2410C",
-    gradEnd: "#EA580C",
-    badgeBg: "#C2410C",
+    gradStart: "#A81D22",
+    gradMid: "#C52227",
+    gradEnd: "#DC3032",
+    badgeBg: "linear-gradient(135deg, #B91C1C, #EF4444)",
     badgeText: "VIP ELITE PARTNER",
-    nameColor: "#C2410C",
-    accentColor: "#EA580C",
+    accentDark: "#7F1519",
   },
   red: {
-    gradStart: "#7C2D12",
-    gradMid: "#C2410C",
-    gradEnd: "#EA580C",
-    badgeBg: "#C2410C",
+    gradStart: "#A81D22",
+    gradMid: "#C52227",
+    gradEnd: "#DC3032",
+    badgeBg: "linear-gradient(135deg, #B91C1C, #EF4444)",
     badgeText: "VIP ELITE PARTNER",
-    nameColor: "#C2410C",
-    accentColor: "#EA580C",
+    accentDark: "#7F1519",
+  },
+  blue: {
+    gradStart: "#072C59",
+    gradMid: "#0A4C8F",
+    gradEnd: "#0E67BE",
+    badgeBg: "linear-gradient(135deg, #073F73, #0284C7)",
+    badgeText: "EXECUTIVE MEMBER",
+    accentDark: "#041F3F",
+  },
+  green: {
+    gradStart: "#064E3B",
+    gradMid: "#059669",
+    gradEnd: "#10B981",
+    badgeBg: "linear-gradient(135deg, #065F46, #059669)",
+    badgeText: "VERIFIED REALTOR",
+    accentDark: "#033326",
   },
 };
 
@@ -99,7 +96,10 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
     const ro = new ResizeObserver(updateScale);
     if (containerRef.current) ro.observe(containerRef.current);
     window.addEventListener("resize", updateScale);
-    return () => { ro.disconnect(); window.removeEventListener("resize", updateScale); };
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", updateScale);
+    };
   }, []);
 
   const empTierFromId = employee?.employeeId?.startsWith("RM-C")
@@ -110,8 +110,8 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
     ? "blue"
     : undefined;
 
-  const activeThemeKey = (theme || employee?.theme || empTierFromId || "green") as keyof typeof THEME_CONFIGS;
-  const T = THEME_CONFIGS[activeThemeKey] || THEME_CONFIGS.green;
+  const activeThemeKey = (theme || employee?.theme || empTierFromId || "orange") as keyof typeof THEME_CONFIGS;
+  const T = THEME_CONFIGS[activeThemeKey] || THEME_CONFIGS.orange;
   const gid = id.replace(/[^a-zA-Z0-9_-]/g, "");
 
   const rawPhoto = employee.photo || (employee as any).photoUrl || PLACEHOLDER_PHOTO;
@@ -123,11 +123,19 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         .replace("realtorsmedia.com", "www.realtorsmedia.world")
         .replace("https://realtorsmedia.world", "https://www.realtorsmedia.world");
 
+  const badgeText =
+    employee?.designation &&
+    ["VIP ELITE PARTNER", "EXECUTIVE MEMBER", "EXECUTIVE PARTNER", "VERIFIED REALTOR"].includes(
+      employee.designation.toUpperCase()
+    )
+      ? employee.designation.toUpperCase()
+      : T.badgeText;
+
   const infoRows = [
-    { label: "EMP ID",     value: employee.employeeId },
-    { label: "SPECIALITY", value: employee.specialization || employee.department || "—" },
-    { label: "LOCATION",   value: employee.location },
-    { label: "VALID TILL", value: employee.validTill },
+    { label: "EMP ID",     value: employee.employeeId || "RM-A-1116" },
+    { label: "SPECIALITY", value: employee.specialization || employee.department || "All Properties" },
+    { label: "LOCATION",   value: employee.location || "Hyderabad" },
+    { label: "VALID TILL", value: employee.validTill || "31 Dec 2028" },
   ];
 
   return (
@@ -157,9 +165,10 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         className="absolute top-0 left-0 overflow-hidden bg-white text-[#0F172A] antialiased shadow-xl border border-[#E2E8F0]"
       >
 
-        {/* ══════════════════════════════════════════
-            1. SVG BACKGROUND — white + themed wave
-           ══════════════════════════════════════════ */}
+        {/* ══════════════════════════════════════════════════════════
+            1. SVG BACKGROUND — top-left wave, top-right banner,
+               and bottom-left layered curves matching reference
+           ══════════════════════════════════════════════════════════ */}
         <svg
           className="absolute inset-0 w-full h-full pointer-events-none z-0"
           viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
@@ -167,38 +176,61 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           xmlns="http://www.w3.org/2000/svg"
         >
           <defs>
-            <linearGradient id={`${gid}-wave`} x1="638" y1="0" x2="100" y2="380" gradientUnits="userSpaceOnUse">
+            <linearGradient id={`${gid}-header-grad`} x1="195" y1="0" x2="638" y2="260" gradientUnits="userSpaceOnUse">
               <stop offset="0%"   stopColor={T.gradStart} />
               <stop offset="50%"  stopColor={T.gradMid} />
               <stop offset="100%" stopColor={T.gradEnd} />
             </linearGradient>
             <clipPath id={`${gid}-clip`}>
-              <rect x="0" y="0" width="638" height="1016" rx="36" ry="36" />
+              <rect x="0" y="0" width={CANVAS_WIDTH} height={CANVAS_HEIGHT} rx="36" ry="36" />
             </clipPath>
           </defs>
           <g clipPath={`url(#${gid}-clip)`}>
             {/* White card base */}
-            <rect width="638" height="1016" fill="#FFFFFF" />
-            {/* Themed wave blob — top right */}
+            <rect width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill="#FFFFFF" />
+
+            {/* Top-left corner decorative wave */}
             <path
-              d="M 162 0 L 638 0 L 638 390 C 520 355 395 268 275 200 C 185 145 108 66 162 0 Z"
-              fill={`url(#${gid}-wave)`}
+              d="M 0 0 L 85 0 C 50 30 25 55 0 85 Z"
+              fill={`url(#${gid}-header-grad)`}
             />
-            {/* Subtle bottom accent line */}
-            <rect x="0" y="1010" width="638" height="6" fill={T.gradMid} />
+            {/* Top-left corner inner accent */}
+            <path
+              d="M 0 0 L 45 0 C 25 18 12 35 0 52 Z"
+              fill={T.accentDark}
+              opacity="0.85"
+            />
+
+            {/* Top-right main header wave banner */}
+            <path
+              d="M 195 0 C 180 60 195 125 240 165 C 285 205 360 220 460 215 C 530 210 590 225 638 258 L 638 0 Z"
+              fill={`url(#${gid}-header-grad)`}
+            />
+
+            {/* Bottom-left layered waves */}
+            {/* Layer 1: Darker inner accent */}
+            <path
+              d="M 0 880 C 60 905 140 955 200 1016 L 0 1016 Z"
+              fill={T.accentDark}
+            />
+            {/* Layer 2: Main outer wave */}
+            <path
+              d="M 0 835 C 50 855 130 910 225 970 C 270 998 305 1010 335 1016 L 0 1016 Z"
+              fill={`url(#${gid}-header-grad)`}
+            />
           </g>
         </svg>
 
-        {/* ══════════════════════════════════════════
-            2. LOGO — top-left on white
-           ══════════════════════════════════════════ */}
-        <div className="absolute left-[22px] top-[18px] z-10 w-[134px] h-[114px]">
+        {/* ══════════════════════════════════════════════════════════
+            2. LOGO — top-left on white background
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute left-[36px] top-[42px] z-10 w-[130px] h-[110px]">
           <div className="relative w-full h-full">
             <Image
               src="/idcard-logo.png"
               alt="Realtors Media Logo"
               fill
-              sizes="280px"
+              sizes="260px"
               className="object-contain"
               priority
               unoptimized
@@ -206,50 +238,31 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════
-            3. BRAND NAME — inside the wave
-           ══════════════════════════════════════════ */}
-        <div className="absolute left-[178px] top-[22px] z-10 pr-[20px]">
-          <div className="text-white font-black text-[46px] tracking-tight leading-none uppercase">
+        {/* ══════════════════════════════════════════════════════════
+            3. BRAND HEADER TEXT — inside the wave banner
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute left-[248px] top-[42px] z-10 pr-[24px]">
+          <div className="text-white font-black text-[38px] tracking-tight leading-none uppercase">
             REALTORS MEDIA
           </div>
-          <div className="text-white/88 font-semibold text-[18px] mt-[10px] leading-snug">
+          <div className="text-white font-medium text-[18px] mt-[10px] tracking-normal leading-snug">
             India&apos;s Real Estate Media Platform
           </div>
-          <div className="text-white/75 font-semibold text-[17px] mt-[6px] leading-snug">
+          <div className="text-white/90 font-normal text-[16px] mt-[6px] tracking-normal leading-snug">
             People | Properties | Possibilities
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════
-            4. BUILDING WATERMARK — right side
-           ══════════════════════════════════════════ */}
-        <div
-          className="absolute right-0 top-[310px] w-[310px] h-[470px] pointer-events-none z-[2] opacity-[0.20]"
-          style={{
-            backgroundImage: "url('/images/building_watermark.jpg')",
-            backgroundSize: "contain",
-            backgroundPosition: "top right",
-            backgroundRepeat: "no-repeat",
-            mixBlendMode: "multiply",
-            maskImage: "linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)",
-            WebkitMaskImage: "linear-gradient(to left, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%)",
-          }}
-        />
-
-        {/* ══════════════════════════════════════════
-            5. PHOTO — left column
-           ══════════════════════════════════════════ */}
-        <div className="absolute left-[24px] top-[216px] z-10">
-          <div
-            className="w-[205px] h-[218px] rounded-[22px] overflow-hidden border-[2.5px] shadow-md"
-            style={{ borderColor: T.accentColor + "55" }}
-          >
+        {/* ══════════════════════════════════════════════════════════
+            4. PROFILE PHOTO — left column with solid black border
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute left-[42px] top-[212px] z-10">
+          <div className="w-[195px] h-[195px] rounded-[24px] overflow-hidden border-[2.5px] border-black shadow-sm bg-[#F1F5F9]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={displayPhoto}
               alt={employee.name || "Member Photo"}
-              className="w-full h-full object-cover object-center"
+              className="w-full h-full object-cover object-top"
               crossOrigin={displayPhoto.startsWith("http") ? "anonymous" : undefined}
               loading="eager"
               onError={(e) => {
@@ -260,22 +273,72 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════
-            6. BARCODE — top right of body
-           ══════════════════════════════════════════ */}
-        <div className="absolute right-[24px] top-[218px] z-10 w-[265px] h-[65px] flex items-center justify-center">
+        {/* ══════════════════════════════════════════════════════════
+            5. TIER PILL BADGE — directly below photo
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute left-[42px] top-[426px] z-10 w-[195px] flex items-center justify-center">
+          <div
+            className="px-5 py-[6px] rounded-full shadow-xs text-center flex items-center justify-center"
+            style={{ background: T.badgeBg }}
+          >
+            <span className="text-white text-[13.5px] font-black uppercase tracking-wider leading-none">
+              {badgeText}
+            </span>
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════
+            6. MEMBER NAME — solid black bold font
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute left-[42px] top-[490px] z-10 w-[320px]">
+          <h1 className="text-[36px] font-black tracking-tight leading-tight text-black truncate">
+            {employee.name || "Ravi Varma"}
+          </h1>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════
+            7. INFO GRID (4 rows) — vertically aligned colons
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute left-[42px] top-[565px] z-10 w-[345px] space-y-[13px]">
+          {infoRows.map(({ label, value }) => (
+            <div key={label} className="grid grid-cols-[130px_18px_1fr] items-baseline">
+              <span className="text-[17px] font-bold text-[#0F172A] uppercase tracking-wide">
+                {label}
+              </span>
+              <span className="text-[17px] font-bold text-[#0F172A] text-center">:</span>
+              <span className="text-[19px] font-black text-[#000000] truncate">
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════
+            8. AUTHORIZED SIGNATURE — line & label
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute left-[42px] top-[792px] z-10 w-[275px]">
+          <div className="w-full h-[2px] bg-black mb-2" />
+          <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#0F172A] leading-none">
+            AUTHORIZED SIGNATURE
+          </div>
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════
+            9. BARCODE — top right of body below header wave
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute right-[36px] top-[254px] z-10 w-[195px] h-[52px] flex items-center justify-end">
           <BarcodeSVG
-            value={employee.employeeId}
+            value={employee.employeeId || "RM-A-1116"}
             className="w-full h-full"
-            color="#0F172A"
+            color="#000000"
           />
         </div>
 
-        {/* ══════════════════════════════════════════
-            7. BUILDING BETTER COMMUNITIES TOGETHER
-           ══════════════════════════════════════════ */}
-        <div className="absolute right-[24px] top-[310px] z-10 text-right">
-          <div className="text-[23px] font-black text-[#0F172A] tracking-tight leading-[1.2]">
+        {/* ══════════════════════════════════════════════════════════
+            10. SLOGAN — right-aligned bold text
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute right-[36px] top-[326px] z-10 text-right">
+          <div className="text-[19px] font-black uppercase text-[#000000] tracking-tight leading-[1.25]">
             BUILDING<br />
             BETTER<br />
             COMMUNITIES<br />
@@ -283,94 +346,55 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════
-            8. TIER BADGE
-           ══════════════════════════════════════════ */}
-        <div className="absolute left-[24px] top-[454px] z-10">
-          <span
-            className="inline-flex items-center px-4 py-[6px] rounded-full text-white text-[15px] font-black uppercase tracking-wider"
-            style={{ backgroundColor: T.badgeBg }}
-          >
-            {T.badgeText}
-          </span>
+        {/* ══════════════════════════════════════════════════════════
+            11. QR CODE — clean, framed directly on white
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute right-[36px] top-[458px] z-10">
+          <QRCodeSVG
+            value={qrValue}
+            size={106}
+            level="M"
+            bgColor="transparent"
+            fgColor="#000000"
+          />
         </div>
 
-        {/* ══════════════════════════════════════════
-            9. MEMBER NAME
-           ══════════════════════════════════════════ */}
-        <div className="absolute left-[24px] top-[502px] z-10 w-[370px]">
-          <h1
-            className="text-[46px] font-black tracking-tight leading-none"
-            style={{ color: T.nameColor }}
-          >
-            {employee.name}
-          </h1>
-        </div>
+        {/* ══════════════════════════════════════════════════════════
+            12. BUILDING WATERMARK — skyscraper illustration with clouds
+           ══════════════════════════════════════════════════════════ */}
+        <div
+          className="absolute right-0 top-[575px] w-[260px] h-[290px] pointer-events-none z-[2] opacity-[0.38]"
+          style={{
+            backgroundImage: "url('/images/building_watermark.jpg')",
+            backgroundSize: "contain",
+            backgroundPosition: "top right",
+            backgroundRepeat: "no-repeat",
+            mixBlendMode: "multiply",
+          }}
+        />
 
-        {/* ══════════════════════════════════════════
-            10. INFO GRID (4 rows)
-           ══════════════════════════════════════════ */}
-        <div className="absolute left-[24px] top-[580px] z-10 w-[365px] space-y-[12px]">
-          {infoRows.map(({ label, value }) => (
-            <div key={label} className="grid grid-cols-[128px_20px_1fr] items-baseline">
-              <span className="text-[16px] font-bold text-[#64748B] uppercase tracking-wide">
-                {label}
-              </span>
-              <span className="text-[18px] font-extrabold text-[#94A3B8]">:</span>
-              <span className="text-[20px] font-extrabold text-[#0F172A] truncate">
-                {value}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* ══════════════════════════════════════════
-            11. QR CODE
-           ══════════════════════════════════════════ */}
-        <div className="absolute right-[24px] top-[580px] z-10 flex flex-col items-center gap-2">
-          <div className="w-[145px] h-[145px] bg-white rounded-[14px] p-1.5 border border-[#E2E8F0] shadow-sm flex items-center justify-center">
-            <QRCodeSVG
-              value={qrValue}
-              size={128}
-              level="M"
-              bgColor="#FFFFFF"
-              fgColor="#0F172A"
-            />
-          </div>
-          <span className="text-[13px] font-black uppercase text-[#0F172A] tracking-wider">
-            Scan to Verify
-          </span>
-        </div>
-
-        {/* ══════════════════════════════════════════
-            12. AUTHORIZED SIGNATURE
-           ══════════════════════════════════════════ */}
-        <div className="absolute left-[24px] top-[838px] z-10 w-[260px]">
-          <div className="w-full h-[1.5px] bg-[#94A3B8] mb-2" />
-          <div className="text-[14px] font-black uppercase text-[#0F172A] tracking-[0.12em] leading-none">
-            Authorized Signature
-          </div>
-        </div>
-
-        {/* ══════════════════════════════════════════
-            13. FOOTER — right-aligned contact info
-           ══════════════════════════════════════════ */}
-        <div className="absolute right-[24px] top-[868px] z-10 text-right space-y-[9px]">
-          <div className="flex items-center justify-end gap-2.5 text-[14px] font-semibold text-[#0F172A]">
+        {/* ══════════════════════════════════════════════════════════
+            13. FOOTER — right-aligned contact info with black icons
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute right-[36px] top-[835px] z-10 text-right space-y-[6px]">
+          <div className="flex items-center justify-end gap-2 text-[13.5px] font-semibold text-[#000000]">
             <span>www.realtorsmedia.world</span>
-            <FaGlobe className="text-[#64748B] text-[14px] shrink-0" />
+            <FaGlobe className="text-black text-[15px] shrink-0" />
           </div>
-          <div className="flex items-center justify-end gap-2.5 text-[14px] font-semibold text-[#0F172A]">
-            <span>+91 8096792778, +91 9441185799</span>
-            <FaPhoneAlt className="text-[#64748B] text-[13px] shrink-0" />
+          <div className="flex items-center justify-end gap-2 text-[13.5px] font-semibold text-[#000000]">
+            <span>+91 7981524909, +91 7981524909</span>
+            <FaPhoneAlt className="text-black text-[13px] shrink-0" />
           </div>
-          <div className="flex items-center justify-end gap-2.5 text-[14px] font-semibold text-[#0F172A]">
-            <span>realtorsmedia.info@gmail.com</span>
-            <FaEnvelope className="text-[#64748B] text-[14px] shrink-0" />
+          <div className="flex items-center justify-end gap-2 text-[13.5px] font-semibold text-[#000000]">
+            <span>{employee.email || "realtorsmedia.info@gmail.com"}</span>
+            <FaEnvelope className="text-black text-[14px] shrink-0" />
           </div>
-          <div className="flex items-center justify-end gap-2.5 text-[14px] font-semibold text-[#0F172A]">
-            <span>Archana Arcade, IT Complex - South Block, 407</span>
-            <FaMapMarkerAlt className="text-[#64748B] text-[14px] shrink-0" />
+          <div className="flex items-center justify-end gap-2 text-[13.5px] font-semibold text-[#000000]">
+            <span>Archana arcade, IT Complex</span>
+            <FaMapMarkerAlt className="text-black text-[15px] shrink-0" />
+          </div>
+          <div className="pr-[23px] text-[13.5px] font-semibold text-[#000000]">
+            <span>South Bloch, 407</span>
           </div>
         </div>
 
