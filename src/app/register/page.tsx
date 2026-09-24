@@ -209,7 +209,7 @@ export default function RegisterPage() {
     location: `${formData.city || "City"}, ${formData.state || "State"}`,
     issuedDate: "24 SEP 2026",
     validTill: "23 SEP 2028",
-    photo: formData.photo || "/images/rohan_deshmukh.png",
+    photo: formData.photo,
     verificationUrl: `https://www.realtorsmedia.world/verify/${previewId}`,
     theme: selectedTier === "orange" ? "red" : selectedTier,
     phone: `+91 ${formData.phone}`,

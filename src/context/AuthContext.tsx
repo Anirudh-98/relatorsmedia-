@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { User } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { subscribeToAuthState, logoutMember } from "@/lib/firebase/auth";
@@ -29,21 +29,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [memberProfile, setMemberProfile] = useState<MemberProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (uid: string, email?: string | null) => {
+  const fetchProfile = useCallback(async (uid: string, email?: string | null) => {
     try {
       const profile = await getMemberProfile(uid, email);
       if (profile) {
-        setMemberProfile(profile);
+        const withUid = { ...profile, uid };
+        setMemberProfile(withUid);
         if (typeof window !== "undefined") {
-          localStorage.setItem("rm_member_profile", JSON.stringify(profile));
+          localStorage.setItem("rm_member_profile", JSON.stringify(withUid));
+        }
+      } else {
+        // No record for this account: drop any profile cached from a previous session/user
+        setMemberProfile(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("rm_member_profile");
         }
       }
       return profile;
     } catch (err) {
       console.warn("Error fetching member profile:", err);
+      // Keep the cached profile only if it belongs to this user
+      setMemberProfile((prev) => (prev && prev.uid === uid ? prev : null));
       return null;
     }
-  };
+  }, []);
 
   useEffect(() => {
     // Immediate hydration from cache for instant dashboard rendering
@@ -62,6 +71,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = subscribeToAuthState(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        // Discard a cached profile that belongs to a different account
+        setMemberProfile((prev) => (prev && prev.uid && prev.uid !== currentUser.uid ? null : prev));
         await fetchProfile(currentUser.uid, currentUser.email);
       } else {
         setMemberProfile(null);
@@ -70,7 +81,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [fetchProfile]);
 
   const logout = async () => {
     await logoutMember();
@@ -82,13 +93,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const refreshProfile = async (targetUser?: User | null) => {
-    const activeUser = targetUser || user || auth.currentUser;
-    if (activeUser) {
-      setUser(activeUser);
-      await fetchProfile(activeUser.uid, activeUser.email);
-    }
-  };
+  const refreshProfile = useCallback(
+    async (targetUser?: User | null) => {
+      const activeUser = targetUser || auth.currentUser;
+      if (activeUser) {
+        setUser(activeUser);
+        await fetchProfile(activeUser.uid, activeUser.email);
+      }
+    },
+    [fetchProfile]
+  );
 
   return (
     <AuthContext.Provider value={{ user, memberProfile, setMemberProfile, loading, logout, refreshProfile }}>

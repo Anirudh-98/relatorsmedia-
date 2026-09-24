@@ -45,6 +45,12 @@ export default function VerifyPage() {
       try {
         // 1. Check Firestore `idCards` collection (Real-time live database)
         const idCardDoc = await getIdCardRecord(decodedId);
+        // Replaced or suspended cards must not verify, even though the record still exists
+        if (idCardDoc && idCardDoc.status && idCardDoc.status !== "ACTIVE") {
+          setEmployee(null);
+          setIsVerified(false);
+          return;
+        }
         if (idCardDoc) {
           setEmployee({
             name: idCardDoc.fullName || idCardDoc.name || "",
@@ -54,8 +60,8 @@ export default function VerifyPage() {
             location: idCardDoc.location || "India",
             issuedDate: idCardDoc.issuedDate || "",
             validTill: idCardDoc.validTill || "",
-            photo: idCardDoc.photoUrl || idCardDoc.photo || "/images/rohan_deshmukh.png",
-            verificationUrl: idCardDoc.verificationUrl || `https://realtorsmedia.world/verify/${idCardDoc.employeeId}`,
+            photo: idCardDoc.photoUrl || idCardDoc.photo || "",
+            verificationUrl: idCardDoc.verificationUrl || `https://www.realtorsmedia.world/verify/${idCardDoc.employeeId}`,
             theme: (idCardDoc.cardTier === "orange" || idCardDoc.cardTier === "red" ? "orange" : idCardDoc.cardTier === "green" ? "green" : "blue") as any,
             phone: idCardDoc.phone || idCardDoc.mobile || "",
             email: idCardDoc.email || "",
@@ -71,7 +77,7 @@ export default function VerifyPage() {
 
         // 2. Check Firestore `members` collection (Real-time live database)
         const memberDoc = await getMemberByEmployeeId(decodedId);
-        if (memberDoc) {
+        if (memberDoc && (!memberDoc.status || memberDoc.status === "ACTIVE")) {
           setEmployee({
             name: memberDoc.fullName || memberDoc.name || "",
             designation: memberDoc.designation || "VERIFIED REALTOR",
@@ -80,8 +86,8 @@ export default function VerifyPage() {
             location: memberDoc.location || (memberDoc.city ? `${memberDoc.city}, ${memberDoc.state || "India"}` : "India"),
             issuedDate: memberDoc.issuedDate || "",
             validTill: memberDoc.validTill || "",
-            photo: memberDoc.photoUrl || memberDoc.photo || "/images/rohan_deshmukh.png",
-            verificationUrl: memberDoc.verificationUrl || `https://realtorsmedia.world/verify/${memberDoc.employeeId}`,
+            photo: memberDoc.photoUrl || memberDoc.photo || "",
+            verificationUrl: memberDoc.verificationUrl || `https://www.realtorsmedia.world/verify/${memberDoc.employeeId}`,
             theme: (((memberDoc.selectedTier as string) === "orange" || (memberDoc.selectedTier as string) === "red") ? "orange" : memberDoc.selectedTier === "green" ? "green" : "blue") as any,
             phone: memberDoc.phone || memberDoc.mobile || "",
             email: memberDoc.email || "",

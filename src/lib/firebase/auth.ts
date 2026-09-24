@@ -9,8 +9,16 @@ import {
   NextOrObserver,
 } from "firebase/auth";
 import { auth } from "./config";
-import { saveMemberProfile, getMemberProfile, MemberProfileData, getNextEmployeeId, saveIdCardRecord } from "./db";
-import { uploadMemberPhoto } from "./storage";
+import {
+  saveMemberProfile,
+  getMemberProfile,
+  MemberProfileData,
+  getNextEmployeeId,
+  getPrefixForTier,
+  saveIdCardRecord,
+  retireIdCardRecord,
+} from "./db";
+import { uploadMemberPhoto, toFirestoreSafePhoto } from "./storage";
 
 export interface RegisterMemberParams {
   email: string;
@@ -31,6 +39,8 @@ export interface RegisterMemberParams {
   selectedTier: "green" | "blue" | "orange";
   photoDataUrlOrFile?: File | string;
   employeeId?: string;
+  department?: string;
+  designation?: string;
 }
 
 /**
@@ -40,6 +50,7 @@ export interface RegisterMemberParams {
 export async function registerMember(params: RegisterMemberParams): Promise<{ user: User; profile: MemberProfileData }> {
   // 1. Create Firebase Auth user or sign in if already exists
   let user: User;
+  let existingProfile: MemberProfileData | null = null;
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, params.email, params.password);
     user = userCredential.user;
@@ -48,6 +59,7 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
       try {
         const signInCredential = await signInWithEmailAndPassword(auth, params.email, params.password);
         user = signInCredential.user;
+        existingProfile = await getMemberProfile(user.uid, user.email).catch(() => null);
       } catch (signInErr: any) {
         throw new Error(
           "An account with this email already exists. Please enter your existing password to update your ID card, or sign in first."
@@ -58,8 +70,14 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     }
   }
 
-  // 2. Generate Member Employee ID sequentially starting from 1111
-  const generatedEmpId = params.employeeId || (await getNextEmployeeId(params.selectedTier));
+  // 2. Reuse the existing account's Member ID when the tier is unchanged,
+  //    otherwise generate the next sequential ID (starting from 1111)
+  const existingEmpId = existingProfile?.employeeId || "";
+  const reuseExistingId =
+    !!existingEmpId && existingEmpId.startsWith(`${getPrefixForTier(params.selectedTier)}-`);
+  const generatedEmpId = reuseExistingId
+    ? existingEmpId
+    : params.employeeId || (await getNextEmployeeId(params.selectedTier));
 
   // 3. Upload photo to Firebase Storage if provided
   let photoUrl = "";
@@ -69,7 +87,7 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     } catch (err) {
       console.warn("Storage photo upload warning:", err);
       if (typeof params.photoDataUrlOrFile === "string") {
-        photoUrl = params.photoDataUrlOrFile;
+        photoUrl = await toFirestoreSafePhoto(params.photoDataUrlOrFile);
       }
     }
   }
@@ -93,14 +111,16 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
 
   // 5. Construct full member profile
   const department =
-    params.memberType === "realtor"
+    params.department ||
+    (params.memberType === "realtor"
       ? "Property Brokerage Cell"
       : params.memberType === "builder"
       ? "Developer Projects Wing"
-      : "Allied Services Cell";
+      : "Allied Services Cell");
 
   const designation =
-    params.memberType === "realtor"
+    params.designation ||
+    (params.memberType === "realtor"
       ? params.selectedTier === "orange"
         ? "VIP ELITE REALTOR"
         : params.selectedTier === "blue"
@@ -108,16 +128,22 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
         : "VERIFIED REALTOR"
       : params.memberType === "builder"
       ? "BUILDER / DEVELOPER"
-      : "INDUSTRY PROFESSIONAL";
+      : "INDUSTRY PROFESSIONAL");
 
   const currentDate = new Date();
-  const issuedDate = `${currentDate.getDate()} ${currentDate.toLocaleString("en-US", { month: "short" }).toUpperCase()} ${currentDate.getFullYear()}`;
-  const validTill = `${currentDate.getDate()} ${currentDate.toLocaleString("en-US", { month: "short" }).toUpperCase()} ${currentDate.getFullYear() + 2}`;
+  const monthLabel = currentDate.toLocaleString("en-US", { month: "short" }).toUpperCase();
+  // Re-registering an existing card keeps its original issue/expiry dates
+  const issuedDate =
+    (reuseExistingId && existingProfile?.issuedDate) ||
+    `${currentDate.getDate()} ${monthLabel} ${currentDate.getFullYear()}`;
+  const validTill =
+    (reuseExistingId && existingProfile?.validTill) ||
+    `${currentDate.getDate()} ${monthLabel} ${currentDate.getFullYear() + 2}`;
 
   const resolvedLocation = params.location || (params.city && params.state ? `${params.city}, ${params.state}` : params.city || "Hyderabad, Telangana");
   const resolvedAgency = params.agencyName || params.companyName || "";
-  const resolvedLicense = params.licenseNumber || params.reraNo || "N/A";
-  const resolvedExperience = params.experience || params.experienceYears || "1";
+  const resolvedLicense = params.licenseNumber || params.reraNo || "";
+  const resolvedExperience = params.experience || params.experienceYears || "";
 
   const profileData: MemberProfileData = {
     uid: user.uid,
@@ -130,12 +156,12 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     state: params.state,
     location: resolvedLocation,
     agencyName: resolvedAgency,
-    companyName: resolvedAgency || `${params.fullName} Realty`,
+    companyName: resolvedAgency,
     licenseNumber: resolvedLicense,
     reraNo: resolvedLicense,
     experience: resolvedExperience,
     experienceYears: resolvedExperience,
-    specialization: params.specialization || "Residential & Commercial",
+    specialization: params.specialization || "Residential Properties",
     photoUrl,
     photo: photoUrl,
     memberType: params.memberType,
@@ -163,7 +189,7 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     agencyName: resolvedAgency,
     licenseNumber: resolvedLicense,
     experience: resolvedExperience,
-    specialization: params.specialization || "Residential & Commercial",
+    specialization: params.specialization || "Residential Properties",
     photoUrl,
     photo: photoUrl,
     cardTier: params.selectedTier,
@@ -175,6 +201,13 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     verificationUrl: `https://www.realtorsmedia.world/verify/${generatedEmpId}`,
     uid: user.uid,
   });
+
+  // Moving to a different tier issues a new ID: the old card must stop verifying
+  if (existingEmpId && !reuseExistingId) {
+    await retireIdCardRecord(existingEmpId, generatedEmpId).catch((err) =>
+      console.warn("Could not retire previous ID card:", err)
+    );
+  }
 
   return { user, profile: profileData };
 }

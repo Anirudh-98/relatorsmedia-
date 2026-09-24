@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { RealtorsMediaIdCard } from "@/components/ui/RealtorsMediaIdCard";
@@ -24,16 +24,8 @@ import {
 } from "react-icons/fa";
 
 export default function DashboardPage() {
-  const { user, memberProfile, setMemberProfile, logout, loading, refreshProfile } = useAuth();
+  const { user, memberProfile, logout, loading, refreshProfile } = useAuth();
   const [isIdModalOpen, setIsIdModalOpen] = useState(false);
-  const [localProfile, setLocalProfile] = useState<any>(null);
-
-  // If user is authenticated, ensure we poll/fetch Firestore profile immediately
-  useEffect(() => {
-    if (user && !memberProfile) {
-      refreshProfile(user);
-    }
-  }, [user, memberProfile, refreshProfile]);
 
   // Login form state for unauthenticated visitors
   const [loginEmail, setLoginEmail] = useState("");
@@ -62,25 +54,24 @@ export default function DashboardPage() {
     }
   };
 
-  const activeProfile = memberProfile || localProfile;
+  // Profile comes only from the auth context so it is cleared on logout / account switch
+  const activeProfile = memberProfile;
 
-  // Determine tier theme: user explicitly selected Green Tier (RM-C)
+  // Determine tier theme: the Member ID prefix is authoritative (RM-C green, RM-B blue, RM-A orange),
+  // falling back to the stored tier for legacy records
   const empId = activeProfile?.employeeId || "";
-  const resolvedTier: "green" | "blue" | "orange" =
-    activeProfile?.selectedTier === "green" ||
-    activeProfile?.tier === "green" ||
-    empId.startsWith("RM-C")
-      ? "green"
-      : activeProfile?.selectedTier === "orange" ||
-        (activeProfile?.tier as string) === "orange" ||
-        (activeProfile?.tier as string) === "red" ||
-        empId.startsWith("RM-A")
-      ? "orange"
-      : activeProfile?.selectedTier === "blue" ||
-        activeProfile?.tier === "blue" ||
-        empId.startsWith("RM-B")
-      ? "blue"
-      : "green"; // Default to Green Tier
+  const storedTier = (activeProfile?.selectedTier || activeProfile?.tier || "") as string;
+  const resolvedTier: "green" | "blue" | "orange" = empId.startsWith("RM-A")
+    ? "orange"
+    : empId.startsWith("RM-B")
+    ? "blue"
+    : empId.startsWith("RM-C")
+    ? "green"
+    : storedTier === "orange" || storedTier === "red"
+    ? "orange"
+    : storedTier === "blue"
+    ? "blue"
+    : "green"; // Default to Green Tier
 
   // Check if profile exists in Firestore database
   const isProfileComplete = !!(activeProfile && activeProfile.employeeId);
@@ -105,15 +96,11 @@ export default function DashboardPage() {
         : ""),
     issuedDate: activeProfile?.issuedDate || "",
     validTill: activeProfile?.validTill || "",
-    photo:
-      activeProfile?.photoUrl ||
-      activeProfile?.photo ||
-      user?.photoURL ||
-      "/images/rohan_deshmukh.png",
+    photo: activeProfile?.photoUrl || activeProfile?.photo || user?.photoURL || "",
     verificationUrl:
       activeProfile?.verificationUrl ||
       (activeProfile?.employeeId
-        ? `https://realtorsmedia.world/verify/${activeProfile.employeeId}`
+        ? `https://www.realtorsmedia.world/verify/${activeProfile.employeeId}`
         : ""),
     theme: resolvedTier,
     phone: activeProfile?.phone || activeProfile?.mobile || "",
@@ -427,10 +414,6 @@ export default function DashboardPage() {
         onClose={() => setIsIdModalOpen(false)}
         initialEmployee={isProfileComplete ? currentEmployee : undefined}
         initialTier={resolvedTier}
-        onProfileUpdated={(updatedProfile) => {
-          setLocalProfile(updatedProfile);
-          setMemberProfile(updatedProfile);
-        }}
       />
     </PortalLayout>
   );

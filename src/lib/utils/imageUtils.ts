@@ -3,8 +3,10 @@
  * on both local development (localhost) and production (realtorsmedia.world),
  * and allow html-to-image canvas export without tainting.
  */
+export const PLACEHOLDER_PHOTO = "/images/member_placeholder.svg";
+
 export function getSafePhotoUrl(url?: string | null): string {
-  if (!url) return "/images/rohan_deshmukh.png";
+  if (!url) return PLACEHOLDER_PHOTO;
   if (
     url.startsWith("data:") ||
     url.startsWith("blob:") ||

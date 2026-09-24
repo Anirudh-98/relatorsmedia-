@@ -4,7 +4,6 @@ import React, { useState, useRef, useEffect } from "react";
 import { toPng } from "html-to-image";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   FaTimes,
   FaDownload,
@@ -31,8 +30,16 @@ import { realtorsEmployees, cardTierPlans } from "@/data/portalData";
 import { useAuth } from "@/context/AuthContext";
 import { registerMember } from "@/lib/firebase/auth";
 import { updateProfile } from "firebase/auth";
-import { getNextEmployeeId, peekNextEmployeeId, saveMemberProfile, saveIdCardRecord, MemberProfileData } from "@/lib/firebase/db";
-import { uploadMemberPhoto, compressImage } from "@/lib/firebase/storage";
+import {
+  getNextEmployeeId,
+  getPrefixForTier,
+  peekNextEmployeeId,
+  saveMemberProfile,
+  saveIdCardRecord,
+  retireIdCardRecord,
+  MemberProfileData,
+} from "@/lib/firebase/db";
+import { uploadMemberPhoto, compressImage, toFirestoreSafePhoto } from "@/lib/firebase/storage";
 import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
 
 export interface IdCardModalProps {
@@ -69,12 +76,20 @@ const PRESET_PHOTOS = [
   { label: "Priya S.", path: "/images/realtor_priya.jpg" },
 ];
 
-const TIER_PREFIX_MAP: Record<string, string> = {
-  green: "RM-C",
-  blue: "RM-B",
-  orange: "RM-A",
-  red: "RM-A",
+type TierKey = "green" | "blue" | "orange";
+
+// "red" is a legacy alias of the orange (RM-A) tier
+const normalizeTier = (tier?: string | null): TierKey =>
+  tier === "orange" || tier === "red" ? "orange" : tier === "blue" ? "blue" : "green";
+
+const TIER_DESIGNATION: Record<TierKey, string> = {
+  green: "VERIFIED REALTOR",
+  blue: "EXECUTIVE REALTOR",
+  orange: "VIP ELITE REALTOR",
 };
+
+const formatCardDate = (date: Date, addYears = 0) =>
+  `${date.getDate()} ${date.toLocaleString("en-US", { month: "short" }).toUpperCase()} ${date.getFullYear() + addYears}`;
 
 export const IdCardModal: React.FC<IdCardModalProps> = ({
   isOpen,
@@ -83,42 +98,41 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   initialTier = "green",
   onProfileUpdated,
 }) => {
-  const router = useRouter();
   const { user, memberProfile, setMemberProfile, refreshProfile } = useAuth();
-  const [selectedTier, setSelectedTier] = useState<"green" | "blue" | "orange" | "red">(initialTier);
+  const [selectedTier, setSelectedTier] = useState<TierKey>(normalizeTier(initialTier));
 
-  const getPrefix = (tier: "green" | "blue" | "orange" | "red") =>
-    TIER_PREFIX_MAP[tier] || "RM-B";
-
-  // Form state including Create & Confirm Password
-  const [formData, setFormData] = useState({
+  const buildInitialForm = () => ({
     name:
       initialEmployee?.name ||
       memberProfile?.fullName ||
       (user?.displayName && user.displayName !== "Verified Member" ? user.displayName : "") ||
       "",
-    mobile: initialEmployee?.phone || memberProfile?.phone || "",
+    mobile: initialEmployee?.phone || memberProfile?.phone || memberProfile?.mobile || "",
     email: initialEmployee?.email || memberProfile?.email || user?.email || "",
     location:
       initialEmployee?.location ||
-      (memberProfile ? `${memberProfile.city}, ${memberProfile.state}` : ""),
-    agencyName: initialEmployee?.agencyName || memberProfile?.companyName || "",
+      memberProfile?.location ||
+      (memberProfile?.city ? `${memberProfile.city}, ${memberProfile.state || "India"}` : ""),
+    agencyName: initialEmployee?.agencyName || memberProfile?.agencyName || memberProfile?.companyName || "",
     licenseNumber:
       initialEmployee?.licenseNumber ||
       initialEmployee?.reraNumber ||
+      memberProfile?.licenseNumber ||
       memberProfile?.reraNo ||
       "",
-    experience: initialEmployee?.experience || memberProfile?.experienceYears || "",
+    experience: initialEmployee?.experience || memberProfile?.experience || memberProfile?.experienceYears || "",
     specialization: initialEmployee?.specialization || memberProfile?.specialization || "Residential Properties",
-    photo: initialEmployee?.photo || memberProfile?.photoUrl || user?.photoURL || "",
+    // Never pre-fill a placeholder photo: a real photo is mandatory for the card
+    photo: initialEmployee?.photo || memberProfile?.photoUrl || memberProfile?.photo || user?.photoURL || "",
     employeeId: initialEmployee?.employeeId || memberProfile?.employeeId || "",
     issuedDate: initialEmployee?.issuedDate || memberProfile?.issuedDate || "",
     validTill: initialEmployee?.validTill || memberProfile?.validTill || "",
-    designation: initialEmployee?.designation || memberProfile?.designation || "VERIFIED REALTOR",
     department: initialEmployee?.department || memberProfile?.department || "Property Sales & Channel",
     password: "",
     confirmPassword: "",
   });
+
+  const [formData, setFormData] = useState(buildInitialForm);
 
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -142,68 +156,69 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cardContainerRef = useRef<HTMLDivElement>(null);
+  const previewRequestRef = useRef(0);
 
-  // Sync state when initial props change or modal opens
-  useEffect(() => {
-    if (initialTier) {
-      setSelectedTier(initialTier);
-    }
-  }, [initialTier]);
+  // An ID already issued for this tier (the member's own, or the card being inspected)
+  const existingIdForTier = (tier: TierKey) => {
+    const prefix = `${getPrefixForTier(tier)}-`;
+    return [initialEmployee?.employeeId, memberProfile?.employeeId].find((id) => id && id.startsWith(prefix)) || "";
+  };
 
-  useEffect(() => {
-    if (isOpen && !initialEmployee?.employeeId) {
-      peekNextEmployeeId(selectedTier).then((seqId) => {
-        setFormData((prev) => ({ ...prev, employeeId: seqId }));
-      });
+  // Show the member's existing ID for the tier, otherwise preview the next sequential ID.
+  // Stale lookups (e.g. after rapid tier switching) are ignored.
+  const resolvePreviewId = async (tier: TierKey) => {
+    const requestId = ++previewRequestRef.current;
+    let nextId = existingIdForTier(tier);
+    if (!nextId) {
+      try {
+        nextId = await peekNextEmployeeId(tier);
+      } catch {
+        nextId = `${getPrefixForTier(tier)}-1111`;
+      }
     }
-  }, [isOpen, selectedTier, initialEmployee]);
+    if (requestId === previewRequestRef.current) {
+      setFormData((prev) => ({ ...prev, employeeId: nextId }));
+    }
+  };
 
+  // Reset the form every time the modal is opened so stale edits/success states don't leak between sessions
   useEffect(() => {
-    if (isOpen) {
-      setFormData((prev) => ({
-        ...prev,
-        email:
-          prev.email && prev.email !== "rohan.d@realtorsmedia.com"
-            ? prev.email
-            : initialEmployee?.email || memberProfile?.email || user?.email || "",
-        name:
-          prev.name && prev.name !== "Rohan Deshmukh"
-            ? prev.name
-            : initialEmployee?.name ||
-              memberProfile?.fullName ||
-              (user?.displayName && user.displayName !== "Verified Member" ? user.displayName : "") ||
-              "",
-        mobile:
-          prev.mobile && prev.mobile !== "+91 98765 43210"
-            ? prev.mobile
-            : initialEmployee?.phone || memberProfile?.phone || "",
-        location:
-          prev.location && prev.location !== "Pune, Maharashtra"
-            ? prev.location
-            : initialEmployee?.location ||
-              (memberProfile ? `${memberProfile.city}, ${memberProfile.state}` : prev.location),
-        agencyName:
-          prev.agencyName || initialEmployee?.agencyName || memberProfile?.companyName || "",
-        licenseNumber:
-          prev.licenseNumber ||
-          initialEmployee?.licenseNumber ||
-          initialEmployee?.reraNumber ||
-          memberProfile?.reraNo ||
-          "",
-        specialization:
-          prev.specialization || initialEmployee?.specialization || memberProfile?.specialization || "",
-        experience:
-          prev.experience || initialEmployee?.experience || memberProfile?.experienceYears || "",
-        photo:
-          prev.photo && prev.photo !== "/images/rohan_deshmukh.png"
-            ? prev.photo
-            : initialEmployee?.photo || memberProfile?.photoUrl || user?.photoURL || "/images/rohan_deshmukh.png",
-        employeeId: initialEmployee?.employeeId || memberProfile?.employeeId || prev.employeeId,
-        designation: initialEmployee?.designation || memberProfile?.designation || prev.designation,
-        department: initialEmployee?.department || memberProfile?.department || prev.department,
-      }));
+    if (!isOpen) return;
+    const tier = normalizeTier(initialTier);
+    setSelectedTier(tier);
+    setFormData(buildInitialForm());
+    setIsGenerated(false);
+    setAuthError(null);
+    setAuthSuccessMessage(null);
+    setPhotoError(null);
+    resolvePreviewId(tier);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // If the member profile finishes loading while the modal is open, fill in fields the user hasn't typed yet
+  useEffect(() => {
+    if (!isOpen || !memberProfile) return;
+    const loaded = buildInitialForm();
+    setFormData((prev) => ({
+      ...prev,
+      name: prev.name || loaded.name,
+      mobile: prev.mobile || loaded.mobile,
+      email: prev.email || loaded.email,
+      location: prev.location || loaded.location,
+      agencyName: prev.agencyName || loaded.agencyName,
+      licenseNumber: prev.licenseNumber || loaded.licenseNumber,
+      experience: prev.experience || loaded.experience,
+      photo: prev.photo || loaded.photo,
+      issuedDate: prev.issuedDate || loaded.issuedDate,
+      validTill: prev.validTill || loaded.validTill,
+    }));
+    const existing = existingIdForTier(selectedTier);
+    if (existing) {
+      previewRequestRef.current++;
+      setFormData((prev) => ({ ...prev, employeeId: existing }));
     }
-  }, [isOpen, user, memberProfile, initialEmployee]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, memberProfile?.uid, memberProfile?.employeeId]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -318,12 +333,17 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     setIsSwitchingCamera(false);
   };
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
+    // Camera not streaming yet: capturing now would produce a black image
+    if (!video.videoWidth || !video.videoHeight) {
+      setCameraError("Camera is still starting. Please wait a moment and try again.");
+      return;
+    }
     const canvas = document.createElement("canvas");
-    canvas.width = video.videoWidth || 640;
-    canvas.height = video.videoHeight || 640;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       if (facingMode === "user") {
@@ -332,61 +352,60 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         ctx.scale(-1, 1);
       }
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+      const rawDataUrl = canvas.toDataURL("image/jpeg", 0.92);
+      stopCamera();
+      const dataUrl = (await compressImage(rawDataUrl, 1200, 1200, 0.88).catch(() => "")) || rawDataUrl;
       setFormData((prev) => ({ ...prev, photo: dataUrl }));
       setPhotoError(null);
-      stopCamera();
     }
   };
 
   if (!isOpen) return null;
 
-  // Generate unique Member ID sequentially based on tier (RM-C-1111, RM-B-1111, RM-A-1111...)
-  const handleRegenerateId = async (tier: "green" | "blue" | "orange" | "red") => {
-    try {
-      const seqId = await peekNextEmployeeId(tier);
-      setFormData((prev) => ({ ...prev, employeeId: seqId }));
-    } catch {
-      const prefix = getPrefix(tier);
-      setFormData((prev) => ({ ...prev, employeeId: `${prefix}-1111` }));
-    }
+  const handleRegenerateId = (tier: TierKey) => {
+    resolvePreviewId(tier);
   };
 
   // Change tier and update sequential ID format
-  const handleTierChange = async (tier: "green" | "blue" | "orange" | "red") => {
-    setSelectedTier(tier);
-    try {
-      const seqId = await peekNextEmployeeId(tier);
-      setFormData((prev) => ({ ...prev, employeeId: seqId }));
-    } catch {
-      const prefix = getPrefix(tier);
-      setFormData((prev) => ({ ...prev, employeeId: `${prefix}-1111` }));
-    }
+  const handleTierChange = (tier: string) => {
+    const nextTier = normalizeTier(tier);
+    setSelectedTier(nextTier);
+    resolvePreviewId(nextTier);
   };
 
   // Handle local image file upload with high-quality compression
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      try {
-        // Compress image proportionally to max 1200px (cuts 5MB to ~180KB without losing quality)
-        const compressed = await compressImage(file, 1200, 1200, 0.88);
-        if (compressed) {
-          setFormData((prev) => ({ ...prev, photo: compressed }));
+    const input = e.target;
+    const file = input.files?.[0];
+    // Clear the input so selecting the same file again (e.g. after "Remove") still fires onChange
+    input.value = "";
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setPhotoError("Please choose an image file (PNG or JPG).");
+      return;
+    }
+
+    try {
+      // Compress image proportionally to max 1200px (cuts 5MB to ~180KB without losing quality)
+      const compressed = await compressImage(file, 1200, 1200, 0.88);
+      if (compressed) {
+        setFormData((prev) => ({ ...prev, photo: compressed }));
+        setPhotoError(null);
+      } else {
+        setPhotoError("Could not read this image. Please try a different photo.");
+      }
+    } catch (err) {
+      console.warn("Photo compression fallback:", err);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (result) {
+          setFormData((prev) => ({ ...prev, photo: result }));
           setPhotoError(null);
         }
-      } catch (err) {
-        console.warn("Photo compression fallback:", err);
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          const result = event.target?.result as string;
-          if (result) {
-            setFormData((prev) => ({ ...prev, photo: result }));
-            setPhotoError(null);
-          }
-        };
-        reader.readAsDataURL(file);
-      }
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -420,39 +439,26 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      // Dynamic Database-Driven Sequential Employee ID Generator
-      // If member already has an official ID registered in Firestore (and hasn't regenerated), preserve it.
-      // Otherwise, query database for highest existing sequence, atomically increment, and guarantee zero duplicates.
-      const nextSequentialId =
-        memberProfile?.employeeId && formData.employeeId === memberProfile.employeeId
-          ? memberProfile.employeeId
-          : await getNextEmployeeId(selectedTier);
+      const tierKey = selectedTier;
+      const designation = TIER_DESIGNATION[tierKey];
+      const department = formData.department || "Property Sales & Channel";
+      const city = formData.location.split(",")[0]?.trim() || formData.location;
+      const state = formData.location.split(",")[1]?.trim() || "India";
 
-      const dynamicVerificationUrl = `https://www.realtorsmedia.world/verify/${nextSequentialId}`;
-
-      // Compress and upload photo to Firebase Storage (authorized by deployed rules)
-      let finalPhotoUrl = formData.photo;
-      try {
-        finalPhotoUrl = await uploadMemberPhoto(formData.photo, user?.uid || nextSequentialId);
-      } catch (uploadErr) {
-        console.warn("Storage upload warning, preserving photo data:", uploadErr);
-      }
-
-      const currentDate = new Date();
-      const issuedDate = `${currentDate.getDate()} ${currentDate.toLocaleString("en-US", { month: "short" }).toUpperCase()} ${currentDate.getFullYear()}`;
-      const validTill = `${currentDate.getDate()} ${currentDate.toLocaleString("en-US", { month: "short" }).toUpperCase()} ${currentDate.getFullYear() + 2}`;
-
-      const tierKey = selectedTier === "red" ? "orange" : selectedTier;
+      let savedProfile: MemberProfileData;
+      let isUpdate = false;
 
       if (!user) {
-        // Create user in Firebase Auth and Firestore with the sequential Member ID
-        const { profile, user: newUser } = await registerMember({
+        // registerMember creates the login, uploads the photo once authenticated, assigns the
+        // Member ID (reusing the existing one if this email already has a card for this tier)
+        // and saves both the `members` and `idCards` records.
+        const { profile } = await registerMember({
           email: formData.email,
           password: formData.password,
           fullName: formData.name,
           phone: formData.mobile,
-          city: formData.location.split(",")[0]?.trim() || formData.location,
-          state: formData.location.split(",")[1]?.trim() || "India",
+          city,
+          state,
           location: formData.location,
           agencyName: formData.agencyName,
           licenseNumber: formData.licenseNumber,
@@ -461,77 +467,33 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           companyName: formData.agencyName,
           memberType: "realtor",
           selectedTier: tierKey,
-          photoDataUrlOrFile: finalPhotoUrl,
-          employeeId: nextSequentialId,
+          photoDataUrlOrFile: formData.photo,
+          department,
+          designation,
         });
+        savedProfile = profile;
+      } else {
+        // Keep the member's existing ID (and its issue/expiry dates) unless they moved to another tier
+        const previousId = memberProfile?.employeeId || "";
+        const keepExistingId = !!previousId && previousId.startsWith(`${getPrefixForTier(tierKey)}-`);
+        const employeeId = keepExistingId ? previousId : await getNextEmployeeId(tierKey);
+        isUpdate = keepExistingId;
 
-        // Save in idCards collection for verifiable QR scans
-        await saveIdCardRecord({
-          employeeId: nextSequentialId,
-          fullName: formData.name,
-          name: formData.name,
-          phone: formData.mobile,
-          mobile: formData.mobile,
-          email: formData.email,
-          location: formData.location,
-          agencyName: formData.agencyName,
-          licenseNumber: formData.licenseNumber,
-          experience: formData.experience,
-          specialization: formData.specialization,
-          photoUrl: finalPhotoUrl,
-          photo: finalPhotoUrl,
-          cardTier: tierKey,
-          department: formData.department || "Property Sales & Channel",
-          designation: formData.designation || "VERIFIED REALTOR",
-          issuedDate: profile.issuedDate || issuedDate,
-          validTill: profile.validTill || validTill,
-          status: "ACTIVE",
-          verificationUrl: dynamicVerificationUrl,
-          uid: newUser.uid,
-        });
+        const now = new Date();
+        const issuedDate = (keepExistingId && memberProfile?.issuedDate) || formatCardDate(now);
+        const validTill = (keepExistingId && memberProfile?.validTill) || formatCardDate(now, 2);
+        const verificationUrl = `https://www.realtorsmedia.world/verify/${employeeId}`;
 
-        const memberPayload = {
-          name: formData.name,
-          fullName: formData.name,
-          employeeId: nextSequentialId,
-          phone: formData.mobile,
-          mobile: formData.mobile,
-          email: formData.email,
-          location: formData.location,
-          agencyName: formData.agencyName,
-          companyName: formData.agencyName,
-          licenseNumber: formData.licenseNumber,
-          experience: formData.experience,
-          specialization: formData.specialization,
-          photo: finalPhotoUrl,
-          photoUrl: finalPhotoUrl,
-          tier: tierKey,
-          selectedTier: tierKey,
-          designation: formData.designation || "VERIFIED REALTOR",
-          department: formData.department || "Property Sales & Channel",
-          issuedDate: profile.issuedDate || issuedDate,
-          validTill: profile.validTill || validTill,
-          verificationUrl: dynamicVerificationUrl,
-        };
-
-        if (typeof window !== "undefined") {
-          localStorage.setItem("rm_last_member", JSON.stringify(memberPayload));
-          localStorage.setItem("rm_member_profile", JSON.stringify(memberPayload));
+        let photoUrl = formData.photo;
+        try {
+          photoUrl = await uploadMemberPhoto(formData.photo, user.uid);
+        } catch (uploadErr) {
+          console.warn("Storage upload warning, storing photo inline:", uploadErr);
+          photoUrl = await toFirestoreSafePhoto(formData.photo);
         }
 
-        setMemberProfile(memberPayload as any);
-        onProfileUpdated?.(memberPayload as any);
-        await refreshProfile(newUser);
-        setFormData((prev) => ({ ...prev, employeeId: nextSequentialId, photo: finalPhotoUrl }));
-        setIsGenerated(true);
-        setAuthSuccessMessage(`✓ Official Member ID ${nextSequentialId} generated and saved to realtime database!`);
-      } else {
-        // User already logged in, update profile with sequential ID in Firestore
         const safeAuthPhotoUrl =
-          finalPhotoUrl && !finalPhotoUrl.startsWith("data:") && finalPhotoUrl.length < 2048
-            ? finalPhotoUrl
-            : undefined;
-
+          photoUrl && !photoUrl.startsWith("data:") && photoUrl.length < 2048 ? photoUrl : undefined;
         try {
           await updateProfile(user, {
             displayName: formData.name,
@@ -541,14 +503,17 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           console.warn("Auth updateProfile warning:", profileErr);
         }
 
-        await saveMemberProfile(user.uid, {
+        const email = formData.email || user.email || "";
+        savedProfile = {
+          ...(memberProfile || {}),
+          uid: user.uid,
           fullName: formData.name,
           name: formData.name,
           phone: formData.mobile,
           mobile: formData.mobile,
-          email: formData.email || user.email || "",
-          city: formData.location.split(",")[0]?.trim() || formData.location,
-          state: formData.location.split(",")[1]?.trim() || "India",
+          email,
+          city,
+          state,
           location: formData.location,
           companyName: formData.agencyName,
           agencyName: formData.agencyName,
@@ -557,79 +522,80 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           experienceYears: formData.experience,
           experience: formData.experience,
           specialization: formData.specialization,
+          memberType: memberProfile?.memberType || "realtor",
           selectedTier: tierKey,
           tier: tierKey,
-          employeeId: nextSequentialId,
-          photoUrl: finalPhotoUrl,
-          photo: finalPhotoUrl,
-          department: formData.department || "Property Sales & Channel",
-          designation: formData.designation || "VERIFIED REALTOR",
-          verificationUrl: dynamicVerificationUrl,
+          employeeId,
+          photoUrl,
+          photo: photoUrl,
+          department,
+          designation,
+          verificationUrl,
           status: "ACTIVE",
           issuedDate,
           validTill,
-        });
+        };
+
+        // Timestamps are managed by saveMemberProfile; don't write back the cached values
+        const { createdAt: _createdAt, updatedAt: _updatedAt, ...profileToSave } = savedProfile;
+        await saveMemberProfile(user.uid, profileToSave);
 
         await saveIdCardRecord({
-          employeeId: nextSequentialId,
+          employeeId,
           fullName: formData.name,
           name: formData.name,
           phone: formData.mobile,
           mobile: formData.mobile,
-          email: formData.email || user.email || "",
+          email,
           location: formData.location,
           agencyName: formData.agencyName,
           licenseNumber: formData.licenseNumber,
           experience: formData.experience,
           specialization: formData.specialization,
-          photoUrl: finalPhotoUrl,
-          photo: finalPhotoUrl,
+          photoUrl,
+          photo: photoUrl,
           cardTier: tierKey,
-          department: formData.department || "Property Sales & Channel",
-          designation: formData.designation || "VERIFIED REALTOR",
+          department,
+          designation,
           issuedDate,
           validTill,
           status: "ACTIVE",
-          verificationUrl: dynamicVerificationUrl,
+          verificationUrl,
           uid: user.uid,
         });
 
-        const memberPayload = {
-          name: formData.name,
-          fullName: formData.name,
-          employeeId: nextSequentialId,
-          phone: formData.mobile,
-          mobile: formData.mobile,
-          email: formData.email || user.email,
-          location: formData.location,
-          agencyName: formData.agencyName,
-          companyName: formData.agencyName,
-          licenseNumber: formData.licenseNumber,
-          experience: formData.experience,
-          specialization: formData.specialization,
-          photo: finalPhotoUrl,
-          photoUrl: finalPhotoUrl,
-          tier: tierKey,
-          selectedTier: tierKey,
-          designation: formData.designation || "VERIFIED REALTOR",
-          department: formData.department || "Property Sales & Channel",
-          issuedDate,
-          validTill,
-          verificationUrl: dynamicVerificationUrl,
-        };
-
-        if (typeof window !== "undefined") {
-          localStorage.setItem("rm_last_member", JSON.stringify(memberPayload));
-          localStorage.setItem("rm_member_profile", JSON.stringify(memberPayload));
+        // A tier change issued a new ID: the old card's QR must stop verifying
+        if (previousId && previousId !== employeeId) {
+          await retireIdCardRecord(previousId, employeeId).catch((err) =>
+            console.warn("Could not retire previous ID card:", err)
+          );
         }
-
-        setMemberProfile(memberPayload as any);
-        onProfileUpdated?.(memberPayload as any);
-        await refreshProfile(user);
-        setFormData((prev) => ({ ...prev, employeeId: nextSequentialId, photo: finalPhotoUrl }));
-        setIsGenerated(true);
-        setAuthSuccessMessage(`✓ Official ID Card ${nextSequentialId} updated and saved to realtime database!`);
       }
+
+      if (typeof window !== "undefined") {
+        localStorage.setItem("rm_member_profile", JSON.stringify(savedProfile));
+      }
+
+      setMemberProfile(savedProfile);
+      onProfileUpdated?.(savedProfile);
+      previewRequestRef.current++;
+      setFormData((prev) => ({
+        ...prev,
+        employeeId: savedProfile.employeeId,
+        photo: savedProfile.photoUrl || prev.photo,
+        issuedDate: savedProfile.issuedDate,
+        validTill: savedProfile.validTill,
+        password: "",
+        confirmPassword: "",
+      }));
+      setIsGenerated(true);
+      setAuthSuccessMessage(
+        isUpdate
+          ? `✓ Official ID Card ${savedProfile.employeeId} updated and saved to realtime database!`
+          : `✓ Official Member ID ${savedProfile.employeeId} generated and saved to realtime database!`
+      );
+      // Sync with Firestore in the background; the saved profile is already shown
+      refreshProfile().catch(() => {});
     } catch (err: any) {
       console.error("ID Card generation error:", err);
       let msg = "Could not complete registration. Please check your details.";
@@ -637,6 +603,8 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         msg = "This email is already registered. Please enter your existing password to update your ID card.";
       } else if (err.code === "auth/weak-password") {
         msg = "Password should be at least 6 characters.";
+      } else if (err.code === "auth/invalid-email") {
+        msg = "Please enter a valid email address.";
       } else if (err.message) {
         msg = err.message;
       }
@@ -646,18 +614,34 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     }
   };
 
-  // High-Resolution CR80 PNG Download (Exact ID Card Print Size - No A4 margins)
-  const handleDownloadPng = async () => {
+  // Only cards whose Member ID is actually registered can be exported — a previewed
+  // (unsaved) ID would print a QR code that fails verification.
+  const canExportCard =
+    isGenerated ||
+    (!!formData.employeeId &&
+      (formData.employeeId === memberProfile?.employeeId || formData.employeeId === initialEmployee?.employeeId));
+
+  const ensureExportable = () => {
     if (!formData.photo) {
       setPhotoError("⚠ Without a photo you will not get an ID card. Please take a photo or upload one from your gallery.");
-      return;
+      return false;
+    }
+    if (!canExportCard) {
+      setPhotoError('Please click "Update & Generate Verified ID Card" first — the Member ID is only valid once saved.');
+      return false;
     }
     setPhotoError(null);
+    return true;
+  };
+
+  // High-Resolution CR80 PNG Download (Exact ID Card Print Size - No A4 margins)
+  const handleDownloadPng = async () => {
+    if (!ensureExportable()) return;
 
     try {
       setIsDownloading(true);
       const cardElement = document.getElementById("modal-realtors-id-card");
-      if (!cardElement) return;
+      if (!cardElement) throw new Error("ID card preview not found");
 
       const dataUrl = await toPng(cardElement, {
         quality: 1,
@@ -692,11 +676,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   };
 
   const handlePrint = async () => {
-    if (!formData.photo) {
-      setPhotoError("⚠ Without a photo you will not get an ID card. Please take a photo or upload one from your gallery.");
-      return;
-    }
-    setPhotoError(null);
+    if (!ensureExportable()) return;
 
     try {
       setIsPrinting(true);
@@ -734,6 +714,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
       const iframeDoc = printIframe.contentWindow?.document;
       if (!iframeDoc) {
+        printIframe.remove();
         window.print();
         return;
       }
@@ -817,11 +798,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   // Construct active employee object for live card render
   const previewEmployee: RealtorsMediaEmployee = {
     name: formData.name || "Realtor Name",
-    designation: formData.agencyName
-      ? formData.agencyName
-      : formData.specialization
-      ? formData.specialization
-      : formData.designation || "VERIFIED REALTOR",
+    designation: formData.agencyName || formData.specialization || TIER_DESIGNATION[selectedTier],
     employeeId: formData.employeeId,
     department: formData.specialization || formData.department || "Property Sales & Channel",
     location: formData.location || "City, State",
@@ -840,7 +817,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   };
 
   const activePlan =
-    cardTierPlans.find((p) => p.tierTheme === selectedTier) || cardTierPlans[1];
+    cardTierPlans.find((p) => normalizeTier(p.tierTheme) === selectedTier) || cardTierPlans[0];
 
   return (
     <div
@@ -892,7 +869,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
               Selected Tier:
             </span>
             {cardTierPlans.map((plan) => {
-              const isSelected = selectedTier === plan.tierTheme;
+              const isSelected = selectedTier === normalizeTier(plan.tierTheme);
               const isGreen = plan.tierTheme === "green";
               const isBlue = plan.tierTheme === "blue";
 
@@ -1083,46 +1060,48 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                 </select>
               </div>
 
-              {/* Create Password & Confirm Password */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
-                    Create Password <span className="text-red-500">*</span>
-                  </label>
-                  <div className="relative">
+              {/* Create Password & Confirm Password (only when creating a new member login) */}
+              {!user && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                      Create Password <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        required={!user}
+                        value={formData.password}
+                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                        placeholder="Min. 6 characters"
+                        className="w-full px-2.5 py-1.5 pr-8 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[12px] cursor-pointer"
+                        title={showPassword ? "Hide password" : "Show password"}
+                      >
+                        {showPassword ? <FaEyeSlash /> : <FaEye />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
+                      Confirm Password <span className="text-red-500">*</span>
+                    </label>
                     <input
                       type={showPassword ? "text" : "password"}
                       required={!user}
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="Min. 6 characters"
-                      className="w-full px-2.5 py-1.5 pr-8 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      placeholder="Re-enter password"
+                      className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-[12px] cursor-pointer"
-                      title={showPassword ? "Hide password" : "Show password"}
-                    >
-                      {showPassword ? <FaEyeSlash /> : <FaEye />}
-                    </button>
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
-                    Confirm Password <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    required={!user}
-                    value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    placeholder="Re-enter password"
-                    className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
-                  />
-                </div>
-              </div>
+              )}
 
               {/* Photo Section */}
               <div className="p-3 bg-[#F8FAFC] rounded-lg border border-[#E2E8F0] space-y-2.5">
@@ -1132,7 +1111,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     <span>Photo <span className="text-red-500">*</span></span>
                   </span>
                   <span className="text-[9px] font-medium text-[#64748B]">
-                    Max 5MB (PNG/JPG)
+                    PNG/JPG • auto-compressed
                   </span>
                 </div>
 

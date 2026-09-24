@@ -222,6 +222,23 @@ export async function saveIdCardRecord(cardData: IdCardRecordData): Promise<void
   );
 }
 
+/**
+ * Marks a previously issued card as replaced so its QR code no longer verifies
+ * (used when a member moves to a different tier and receives a new Member ID).
+ */
+export async function retireIdCardRecord(employeeId: string, replacedBy: string): Promise<void> {
+  const cleanId = employeeId.trim();
+  if (!cleanId || cleanId === replacedBy) return;
+  const cardRef = doc(db, "idCards", cleanId);
+  const snap = await getDoc(cardRef);
+  if (!snap.exists()) return;
+  await updateDoc(cardRef, {
+    status: "SUPERSEDED",
+    replacedBy,
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export async function getIdCardRecord(employeeId: string): Promise<IdCardRecordData | null> {
   const cleanId = employeeId.trim();
   const cardRef = doc(db, "idCards", cleanId);

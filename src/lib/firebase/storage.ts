@@ -78,6 +78,21 @@ export async function compressImage(
 }
 
 /**
+ * When a photo cannot be uploaded to Storage it is stored inline in Firestore.
+ * Firestore documents are capped at 1MB, so shrink inline data URLs to a card-sized image.
+ */
+export async function toFirestoreSafePhoto(photo: string): Promise<string> {
+  if (!photo || !photo.startsWith("data:")) return photo;
+  if (photo.length < 250_000) return photo;
+  try {
+    const shrunk = await compressImage(photo, 600, 600, 0.8);
+    return shrunk || photo;
+  } catch {
+    return photo;
+  }
+}
+
+/**
  * Upload a member profile / ID card photo to Firebase Storage.
  * Compresses the image to reduce size without losing quality,
  * then uploads to Firebase Storage and returns the permanent download URL.

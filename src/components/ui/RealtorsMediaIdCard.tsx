@@ -15,7 +15,7 @@ import {
 } from "react-icons/fa";
 import { BarcodeSVG } from "./BarcodeSVG";
 import { RealtorsMediaEmployee } from "@/types";
-import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
+import { getSafePhotoUrl, PLACEHOLDER_PHOTO } from "@/lib/utils/imageUtils";
 
 export interface RealtorsMediaIdCardProps {
   employee?: RealtorsMediaEmployee;
@@ -203,6 +203,8 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
   const activeThemeKey = theme || employee?.theme || empTierFromId || "green";
   const currentTheme = THEME_CONFIGS[activeThemeKey] || THEME_CONFIGS.green;
   const gradientPrefix = id.replace(/[^a-zA-Z0-9_-]/g, "");
+  const rawLicense = (mergedEmployee.licenseNumber || mergedEmployee.reraNumber || "").trim();
+  const licenseValue = /^n\/?a$/i.test(rawLicense) ? "" : rawLicense;
 
   return (
     <div
@@ -308,7 +310,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             2. TOP BRANDING / HEADER AREA
            ======================================================== */}
-        <div className="relative z-10 w-full pt-8 px-7 flex items-start">
+        <div className="relative z-10 w-full pt-4 px-7 flex items-start">
           {/* LEFT: EMBLEM & BRANDING (full width now) */}
           <div className="flex items-center gap-4 w-full">
             {/* Realtors Media Official Logo */}
@@ -373,7 +375,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
             3. MAIN BODY BACKGROUND: ARCHITECTURAL WATERMARK
            ======================================================== */}
         <div
-          className="absolute right-0 top-[260px] w-[350px] h-[520px] pointer-events-none z-[2] opacity-[0.24]"
+          className="absolute right-0 top-[220px] w-[350px] h-[520px] pointer-events-none z-[2] opacity-[0.24]"
           style={{
             backgroundImage: "url('/images/building_watermark.jpg')",
             backgroundSize: "contain",
@@ -389,14 +391,14 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
             4. EMPLOYEE PHOTO & IDENTITY (LEFT COLUMN)
            ======================================================== */}
         {/* Photo Container */}
-        <div className="absolute left-[44px] top-[342px] z-10">
+        <div className="absolute left-[44px] top-[295px] z-10">
           <div className={`w-[185px] h-[198px] rounded-[22px] p-[3.5px] bg-gradient-to-br ${currentTheme.photoRing} shadow-md ${currentTheme.photoShadow}`}>
             <div className="relative w-full h-full rounded-[18px] overflow-hidden bg-white">
               {(() => {
                 const rawPhoto =
                   mergedEmployee.photo ||
                   (mergedEmployee as any).photoUrl ||
-                  "/images/rohan_deshmukh.png";
+                  PLACEHOLDER_PHOTO;
                 const displayPhoto = getSafePhotoUrl(rawPhoto);
 
                 return (
@@ -413,8 +415,8 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
                     loading="eager"
                     onError={(e) => {
                       const target = e.currentTarget;
-                      if (!target.src.includes("rohan_deshmukh.png")) {
-                        target.src = "/images/rohan_deshmukh.png";
+                      if (!target.src.includes(PLACEHOLDER_PHOTO)) {
+                        target.src = PLACEHOLDER_PHOTO;
                       }
                     }}
                   />
@@ -427,7 +429,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             UNIQUE BARCODE (TOP RIGHT SIDE OF IMAGE) - ONLY BARCODE
            ======================================================== */}
-        <div className="absolute right-[44px] top-[350px] z-10 w-[240px] h-[60px] flex items-center justify-center">
+        <div className="absolute right-[44px] top-[300px] z-10 w-[240px] h-[60px] flex items-center justify-center">
           <BarcodeSVG
             value={mergedEmployee.employeeId}
             className="w-full h-full"
@@ -436,7 +438,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* Employee Identity & Information Grid (Unified Flow) */}
-        <div className="absolute left-[44px] top-[554px] z-10 w-[325px] flex flex-col">
+        <div className="absolute left-[44px] top-[505px] z-10 w-[325px] flex flex-col">
           {/* Subtle Tier Badge */}
           <div className="mb-1.5 flex items-center">
             <span
@@ -465,52 +467,52 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           </div>
 
           {/* 5. EMPLOYEE INFORMATION GRID */}
-          <div className="space-y-[12px] text-[17px] leading-tight">
+          <div className="space-y-[11px] text-[19px] leading-tight">
             {/* EMP ID */}
-            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">EMP ID</span>
-              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal">
+            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">EMP ID</span>
+              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal">
                 {mergedEmployee.employeeId}
               </span>
             </div>
 
             {/* Dept / Specialization */}
-            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">
+            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">
                 {mergedEmployee.specialization ? "Specialty" : "Dept"}
               </span>
-              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal truncate">
+              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal truncate">
                 {mergedEmployee.specialization || mergedEmployee.department}
               </span>
             </div>
 
             {/* Location */}
-            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">Location</span>
-              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal truncate">
+            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">Location</span>
+              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal truncate">
                 {mergedEmployee.location}
               </span>
             </div>
 
             {/* License / RERA or Issued */}
-            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">
-                {mergedEmployee.licenseNumber || mergedEmployee.reraNumber ? "License" : "Issued"}
+            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">
+                {licenseValue ? "License" : "Issued"}
               </span>
-              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal truncate">
-                {mergedEmployee.licenseNumber || mergedEmployee.reraNumber || mergedEmployee.issuedDate}
+              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal truncate">
+                {licenseValue || mergedEmployee.issuedDate}
               </span>
             </div>
 
             {/* Valid Till */}
-            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">Valid Till</span>
-              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal">
+            <div className="grid grid-cols-[118px_18px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[17px] uppercase tracking-wide">Valid Till</span>
+              <span className="font-extrabold text-[#64748B] text-[18px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[19px] tracking-normal">
                 {mergedEmployee.validTill}
               </span>
             </div>
@@ -520,7 +522,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             6. AUTHORIZED SIGNATORY (BOTTOM LEFT)
            ======================================================== */}
-        <div className="absolute left-[44px] top-[835px] z-10 w-[185px]">
+        <div className="absolute left-[44px] top-[790px] z-10 w-[185px]">
           <div className="w-full h-[1.5px] bg-[#94A3B8] mb-1.5" />
           <div className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider leading-none">
             Authorized Signature
@@ -530,7 +532,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             7. RIGHT PROMOTIONAL SECTION: BUILDING BETTER COMMUNITIES
            ======================================================== */}
-        <div className="absolute right-[44px] top-[440px] z-10 text-right w-[240px]">
+        <div className="absolute right-[44px] top-[390px] z-10 text-right w-[240px]">
           <div className={`text-[22px] font-black uppercase leading-[1.18] tracking-tight ${currentTheme.promoTitleColor}`}>
             BUILDING
             <br />
@@ -588,7 +590,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             8. QR CODE SECTION (LOWER RIGHT)
            ======================================================== */}
-        <div className="absolute right-[44px] top-[735px] z-10 flex flex-col items-center">
+        <div className="absolute right-[44px] top-[685px] z-10 flex flex-col items-center">
           <div className="w-[114px] h-[114px] bg-white rounded-[14px] p-2 border border-[#94A3B8]/60 shadow-sm flex items-center justify-center">
             <QRCodeSVG
               value={
