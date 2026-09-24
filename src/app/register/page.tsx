@@ -32,7 +32,7 @@ export default function RegisterPage() {
 
   // Tier selection: green, blue, orange
   const [selectedTier, setSelectedTier] = useState<"green" | "blue" | "orange">("green");
-  const [previewId, setPreviewId] = useState("RM-C-1111");
+  const [previewId, setPreviewId] = useState("");
 
   useEffect(() => {
     peekNextEmployeeId(selectedTier).then((id) => setPreviewId(id));
@@ -43,16 +43,16 @@ export default function RegisterPage() {
 
   // Form inputs
   const [formData, setFormData] = useState({
-    fullName: "Rohan Deshmukh",
-    phone: "9876543210",
-    email: "rohan.deshmukh@example.com",
-    city: "Pune",
-    state: "Maharashtra",
-    reraNo: "A52100012345",
-    experienceYears: "5",
-    specialization: "Residential Plots & Apartments",
-    companyName: "Deshmukh Realty Associates",
-    photo: "/images/rohan_deshmukh.png",
+    fullName: "",
+    phone: "",
+    email: "",
+    city: "",
+    state: "",
+    reraNo: "",
+    experienceYears: "",
+    specialization: "Residential Properties",
+    companyName: "",
+    photo: "",
     password: "",
     confirmPassword: "",
     agreeTerms: true,

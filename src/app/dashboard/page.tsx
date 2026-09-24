@@ -1,539 +1,423 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { RealtorsMediaIdCard } from "@/components/ui/RealtorsMediaIdCard";
-import { realtorsEmployees } from "@/data/portalData";
+import { IdCardModal } from "@/components/ui/IdCardModal";
 import { RealtorsMediaEmployee } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { loginMember } from "@/lib/firebase/auth";
 import {
   FaIdCard,
-  FaHome,
-  FaUsers,
-  FaCoins,
   FaCheckCircle,
   FaDownload,
-  FaPlus,
   FaEye,
   FaPhoneAlt,
   FaEnvelope,
   FaPrint,
-  FaShareAlt,
   FaSignOutAlt,
+  FaExclamationTriangle,
+  FaLock,
+  FaSpinner,
+  FaEdit,
 } from "react-icons/fa";
 
 export default function DashboardPage() {
-  const { user, memberProfile, logout } = useAuth();
-  const [activeTab, setActiveTab] = useState<"card" | "listings" | "leads" | "earnings">("card");
-  const [localMember, setLocalMember] = useState<any>(null);
+  const { user, memberProfile, logout, loading, refreshProfile } = useAuth();
+  const [isIdModalOpen, setIsIdModalOpen] = useState(false);
 
-  React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("rm_last_member") || localStorage.getItem("rm_member_profile");
-      if (stored) {
-        try {
-          setLocalMember(JSON.parse(stored));
-        } catch {}
+  // Login form state for unauthenticated visitors
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      await loginMember(loginEmail.trim(), loginPassword);
+      await refreshProfile();
+    } catch (err: any) {
+      console.error("Dashboard login error:", err);
+      let msg = "Invalid email or password. Please try again.";
+      if (err.code === "auth/user-not-found") {
+        msg = "No user found with this email. Please register first.";
+      } else if (err.code === "auth/wrong-password") {
+        msg = "Incorrect password. Please try again.";
       }
+      setLoginError(msg);
+    } finally {
+      setLoginLoading(false);
     }
-  }, []);
-
-  // Merge live member profile from Firestore & local storage to render exact entered details
-  const activeProfile = {
-    ...localMember,
-    ...memberProfile,
-    photo: memberProfile?.photoUrl || memberProfile?.photo || localMember?.photo || localMember?.photoUrl || user?.photoURL,
-    employeeId: memberProfile?.employeeId || localMember?.employeeId,
-    phone: memberProfile?.phone || memberProfile?.mobile || localMember?.phone || localMember?.mobile,
-    email: memberProfile?.email || localMember?.email || user?.email,
-    name: memberProfile?.fullName || memberProfile?.name || localMember?.name || localMember?.fullName || user?.displayName,
-    location: memberProfile?.location || (memberProfile?.city && memberProfile?.state ? `${memberProfile.city}, ${memberProfile.state}` : memberProfile?.city) || localMember?.location,
-    agencyName: memberProfile?.agencyName || memberProfile?.companyName || localMember?.agencyName || localMember?.companyName,
-    licenseNumber: memberProfile?.licenseNumber || memberProfile?.reraNo || localMember?.licenseNumber || localMember?.reraNo,
-    experience: memberProfile?.experience || memberProfile?.experienceYears || localMember?.experience,
-    specialization: memberProfile?.specialization || localMember?.specialization,
-    tier: memberProfile?.selectedTier || localMember?.tier || localMember?.selectedTier || "blue",
   };
 
-  const hasCustomMember = !!(activeProfile.name || activeProfile.employeeId || activeProfile.email);
+  // Determine tier theme: user explicitly selected Green Tier (RM-C)
+  const empId = memberProfile?.employeeId || "";
+  const resolvedTier: "green" | "blue" | "orange" =
+    memberProfile?.selectedTier === "green" ||
+    memberProfile?.tier === "green" ||
+    empId.startsWith("RM-C")
+      ? "green"
+      : memberProfile?.selectedTier === "orange" ||
+        (memberProfile?.tier as string) === "orange" ||
+        (memberProfile?.tier as string) === "red" ||
+        empId.startsWith("RM-A")
+      ? "orange"
+      : memberProfile?.selectedTier === "blue" ||
+        memberProfile?.tier === "blue" ||
+        empId.startsWith("RM-B")
+      ? "blue"
+      : "green"; // Default to Green Tier
 
-  const currentEmployee: RealtorsMediaEmployee = hasCustomMember
-    ? {
-        name: activeProfile.name || (user?.displayName || "Verified Member"),
-        designation: activeProfile.designation || (activeProfile.agencyName ? `${activeProfile.agencyName} - REALTOR` : "VERIFIED REALTOR"),
-        employeeId: activeProfile.employeeId || "RM-C-1111",
-        department: activeProfile.department || "Property Sales & Channel",
-        location: activeProfile.location || "Hyderabad, Telangana",
-        issuedDate: activeProfile.issuedDate || "24 SEP 2026",
-        validTill: activeProfile.validTill || "23 SEP 2028",
-        photo: activeProfile.photo || "/images/realtor_ramnath.jpg",
-        verificationUrl: activeProfile.verificationUrl || `https://realtorsmedia.com/verify/${activeProfile.employeeId || "RM-C-1111"}`,
-        theme: (activeProfile.tier === "orange" || activeProfile.tier === "red" ? "orange" : activeProfile.tier === "green" ? "green" : "blue") as any,
-        phone: activeProfile.phone || "+91 98490 12345",
-        email: activeProfile.email || user?.email || "member@realtorsmedia.com",
-        agencyName: activeProfile.agencyName || "",
-        licenseNumber: activeProfile.licenseNumber || "",
-        experience: activeProfile.experience || "",
-        specialization: activeProfile.specialization || "Residential Properties",
-      }
-    : realtorsEmployees[1];
+  // Check if profile exists in Firestore database
+  const isProfileComplete = !!(memberProfile && memberProfile.employeeId);
 
-  // Simulated listings
-  const myListings = [
-    {
-      id: "prop-101",
-      title: "4 BHK Luxury Villa with Private Pool",
-      location: "Banjara Hills, Hyderabad",
-      price: "₹ 4.85 Cr",
-      category: "Villas",
-      status: "Active",
-      views: 342,
-      leads: 18,
-    },
-    {
-      id: "prop-102",
-      title: "500 Sq. Yds Corner Open Plot - HMDA Approved",
-      location: "Mokila, Hyderabad",
-      price: "₹ 1.25 Cr",
-      category: "Open Plots",
-      status: "Active",
-      views: 512,
-      leads: 29,
-    },
-    {
-      id: "prop-103",
-      title: "Commercial Retail Space (Ground Floor)",
-      location: "Kondapur High Street, Hyderabad",
-      price: "₹ 2.10 Cr",
-      category: "Commercial",
-      status: "Under Offer",
-      views: 180,
-      leads: 12,
-    },
-  ];
+  // 100% Real-time database details from Firestore - ZERO hardcoded dummy presets
+  const currentEmployee: RealtorsMediaEmployee = {
+    name:
+      memberProfile?.fullName ||
+      memberProfile?.name ||
+      (user?.displayName && user.displayName !== "Verified Member"
+        ? user.displayName
+        : user?.email?.split("@")[0] || ""),
+    designation:
+      memberProfile?.designation ||
+      (memberProfile?.agencyName ? `${memberProfile.agencyName} - REALTOR` : "VERIFIED REALTOR"),
+    employeeId: memberProfile?.employeeId || "",
+    department: memberProfile?.department || "Property Sales & Channel",
+    location:
+      memberProfile?.location ||
+      (memberProfile?.city
+        ? `${memberProfile.city}, ${memberProfile.state || "India"}`
+        : ""),
+    issuedDate: memberProfile?.issuedDate || "",
+    validTill: memberProfile?.validTill || "",
+    photo:
+      memberProfile?.photoUrl ||
+      memberProfile?.photo ||
+      user?.photoURL ||
+      "/images/rohan_deshmukh.png",
+    verificationUrl:
+      memberProfile?.verificationUrl ||
+      (memberProfile?.employeeId
+        ? `https://realtorsmedia.world/verify/${memberProfile.employeeId}`
+        : ""),
+    theme: resolvedTier,
+    phone: memberProfile?.phone || memberProfile?.mobile || "",
+    email: memberProfile?.email || user?.email || "",
+    agencyName: memberProfile?.agencyName || memberProfile?.companyName || "",
+    licenseNumber: memberProfile?.licenseNumber || memberProfile?.reraNo || "",
+    experience: memberProfile?.experience || memberProfile?.experienceYears || "",
+    specialization: memberProfile?.specialization || "Residential Properties",
+  };
 
-  // Simulated leads
-  const myLeads = [
-    {
-      id: "lead-1",
-      name: "Venkat Rao",
-      phone: "+91 98490 87654",
-      property: "4 BHK Luxury Villa",
-      budget: "₹ 4.5 - 5 Cr",
-      date: "Today, 11:20 AM",
-      status: "New",
-    },
-    {
-      id: "lead-2",
-      name: "Dr. Ananya Reddy",
-      phone: "+91 99890 12389",
-      property: "500 Sq. Yds Mokila Plot",
-      budget: "₹ 1.2 Cr",
-      date: "Yesterday",
-      status: "Contacted",
-    },
-    {
-      id: "lead-3",
-      name: "Rajeshwar Rao & Sons",
-      phone: "+91 94401 56780",
-      property: "Commercial Retail Space",
-      budget: "₹ 2 Cr",
-      date: "20 Sep 2026",
-      status: "Site Visit Scheduled",
-    },
-  ];
+  // If loading auth state
+  if (loading) {
+    return (
+      <PortalLayout
+        title="MEMBER PORTAL DASHBOARD"
+        subtitle="Loading your real-time verified credentials..."
+        breadcrumbs={[{ label: "Dashboard" }]}
+      >
+        <div className="bg-white rounded-[4px] border border-[#C9D7E3] p-16 text-center shadow-xs flex flex-col items-center justify-center gap-3">
+          <FaSpinner className="text-3xl text-[#073F73] animate-spin" />
+          <p className="text-sm font-bold text-[#073F73]">Loading your member profile from database...</p>
+        </div>
+      </PortalLayout>
+    );
+  }
+
+  // If user is not logged in, show direct login card
+  if (!user) {
+    return (
+      <PortalLayout
+        title="MEMBER PORTAL LOGIN"
+        subtitle="Sign in with your registered email and password to view your official realtime ID card"
+        breadcrumbs={[{ label: "Login" }]}
+      >
+        <div className="max-w-md mx-auto bg-white rounded-[6px] border border-[#C9D7E3] p-6 shadow-sm space-y-4">
+          <div className="text-center space-y-1">
+            <div className="w-12 h-12 rounded-full bg-[#EEF6FC] text-[#073F73] flex items-center justify-center mx-auto text-xl">
+              <FaIdCard />
+            </div>
+            <h2 className="text-lg font-black text-[#073F73]">Member Sign In</h2>
+            <p className="text-xs text-gray-500">
+              Enter your registered credentials to view your live ID card
+            </p>
+          </div>
+
+          {loginError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs p-3 rounded flex items-center gap-2">
+              <FaExclamationTriangle className="shrink-0" />
+              <span>{loginError}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-3.5">
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                Email Address
+              </label>
+              <input
+                type="email"
+                required
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="your.email@realtorsmedia.com"
+                className="w-full px-3 py-2 text-xs border border-gray-300 rounded focus:outline-none focus:border-[#073F73]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-bold text-gray-700 uppercase mb-1">
+                Password
+              </label>
+              <input
+                type="password"
+                required
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-3 py-2 text-xs border border-gray-300 rounded focus:outline-none focus:border-[#073F73]"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loginLoading}
+              className="w-full bg-[#073F73] hover:bg-[#06345F] text-white text-xs font-black uppercase py-2.5 rounded transition-colors flex items-center justify-center gap-2 cursor-pointer shadow-xs disabled:opacity-50"
+            >
+              {loginLoading ? (
+                <>
+                  <FaSpinner className="animate-spin text-xs" />
+                  <span>Signing In...</span>
+                </>
+              ) : (
+                <>
+                  <FaLock className="text-xs" />
+                  <span>Access Member Dashboard</span>
+                </>
+              )}
+            </button>
+          </form>
+
+          <div className="text-center pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+            <Link href="/forgot-password" className="text-gray-500 hover:text-[#073F73]">
+              Forgot password?
+            </Link>
+            <Link href="/register" className="text-[#168A3A] font-bold hover:underline">
+              Register New ID Card →
+            </Link>
+          </div>
+        </div>
+      </PortalLayout>
+    );
+  }
 
   return (
     <PortalLayout
-      title="MEMBER PORTAL DASHBOARD"
-      subtitle="Manage your Realtors Media verified credentials, active property listings, client inquiries, and transaction commissions"
-      badge={memberProfile ? `${memberProfile.selectedTier.toUpperCase()} MEMBER` : "EXECUTIVE MEMBER"}
+      title="MEMBER OFFICIAL ID CARD"
+      subtitle="Your verified real-time digital credential linked with the national Realtors Media database"
+      badge={
+        isProfileComplete
+          ? `${resolvedTier.toUpperCase()} MEMBER`
+          : "PENDING ACTIVATION"
+      }
       breadcrumbs={[{ label: "Dashboard" }]}
       action={
         <div className="flex items-center gap-2">
-          <Link
-            href="/post-property"
-            className="bg-[#E21F2F] hover:bg-[#c91826] text-white text-[11px] font-black uppercase px-3 py-1.5 rounded-[3px] transition-colors flex items-center gap-1.5"
+          <button
+            onClick={() => logout()}
+            className="bg-gray-100 hover:bg-gray-200 text-[#143B5D] text-[11px] font-bold px-3 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Sign Out of Member Portal"
           >
-            <FaPlus className="text-[10px]" />
-            <span>Post Property</span>
-          </Link>
-          {user && (
-            <button
-              onClick={() => logout()}
-              className="bg-gray-100 hover:bg-gray-200 text-[#143B5D] text-[11px] font-bold px-2.5 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1 cursor-pointer"
-              title="Sign Out of Firebase"
-            >
-              <FaSignOutAlt className="text-[10px]" />
-              <span>Logout</span>
-            </button>
-          )}
+            <FaSignOutAlt className="text-[10px]" />
+            <span>Sign Out</span>
+          </button>
         </div>
       }
     >
       <div className="space-y-6">
-        {/* Top Member Profile Summary Card */}
-        <div className="bg-white rounded-[4px] border border-[#C9D7E3] p-4 sm:p-5 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-4 w-full md:w-auto">
-            <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden border-2 border-[#0B4F8A] flex-shrink-0 bg-gray-100">
-              <img
-                src={currentEmployee.photo}
-                alt={currentEmployee.name}
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-black text-[#073F73]">
-                  {currentEmployee.name}
-                </h2>
-                <span className="bg-[#EEF6FC] text-[#0B4F8A] border border-[#A5CEE8] text-[9.5px] font-black px-2 py-0.5 rounded-full uppercase">
-                  {memberProfile?.selectedTier ? `${memberProfile.selectedTier} Tier` : "Verified Executive"}
-                </span>
+        {/* Real-time Database Registration Alert if ID Card is not in Firestore */}
+        {!isProfileComplete && (
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 p-5 rounded-[4px] shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <FaExclamationTriangle className="text-2xl text-amber-600 mt-0.5 shrink-0" />
+              <div>
+                <h3 className="text-base font-black text-amber-900">
+                  Official Green ID Card Not Stored in Database Yet
+                </h3>
+                <p className="text-xs text-amber-800 mt-1 max-w-2xl leading-relaxed">
+                  Logged in as <strong>{user.email}</strong>. Your account is authenticated, but your real name, photograph, and Green ID card record have not been stored in the database yet. Click below to enter your details, upload your real photograph, and save your verified card to Firestore.
+                </p>
               </div>
-              <p className="text-[11.5px] text-gray-600 font-semibold">
-                ID: <span className="text-[#073F73] font-bold">{currentEmployee.employeeId}</span> • {currentEmployee.department}
-                {currentEmployee.agencyName && <span> • <strong>{currentEmployee.agencyName}</strong></span>}
-              </p>
-              <p className="text-[11px] text-gray-500">
-                📍 {currentEmployee.location} • 📞 {currentEmployee.phone} • ✉ {currentEmployee.email}
-              </p>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto justify-end">
-            <Link
-              href={`/verify/${currentEmployee.employeeId}`}
-              className="bg-[#073F73] hover:bg-[#06345F] text-white text-[11px] font-bold px-3 py-1.5 rounded-[3px] transition-colors flex items-center gap-1.5"
-            >
-              <FaEye className="text-[10px]" />
-              <span>Public Verification</span>
-            </Link>
             <button
-              onClick={() => window.print()}
-              className="bg-gray-100 hover:bg-gray-200 text-[#143B5D] text-[11px] font-bold px-3 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer"
-            >
-              <FaPrint className="text-[10px]" />
-              <span>Print ID</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 4 Stats counters */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="bg-white p-3.5 rounded-[4px] border border-[#C9D7E3] text-center">
-            <span className="text-[10px] font-bold text-gray-500 uppercase block">Active Listings</span>
-            <span className="text-xl font-black text-[#073F73]">3</span>
-            <span className="text-[10px] text-emerald-600 font-bold block mt-0.5">2 Verified HMDA</span>
-          </div>
-
-          <div className="bg-white p-3.5 rounded-[4px] border border-[#C9D7E3] text-center">
-            <span className="text-[10px] font-bold text-gray-500 uppercase block">Total Inquiries</span>
-            <span className="text-xl font-black text-[#073F73]">59</span>
-            <span className="text-[10px] text-emerald-600 font-bold block mt-0.5">+18 this month</span>
-          </div>
-
-          <div className="bg-white p-3.5 rounded-[4px] border border-[#C9D7E3] text-center">
-            <span className="text-[10px] font-bold text-gray-500 uppercase block">Commission Tier</span>
-            <span className="text-xl font-black text-[#168A3A]">30%</span>
-            <span className="text-[10px] text-gray-500 font-semibold block mt-0.5">Executive Level</span>
-          </div>
-
-          <div className="bg-white p-3.5 rounded-[4px] border border-[#C9D7E3] text-center">
-            <span className="text-[10px] font-bold text-gray-500 uppercase block">ID Card Status</span>
-            <span className="text-xl font-black text-emerald-600">ACTIVE</span>
-            <span className="text-[10px] text-gray-500 font-semibold block mt-0.5">RERA Compliant</span>
-          </div>
-        </div>
-
-        {/* Navigation Tabs */}
-        <div className="bg-white rounded-[4px] border border-[#C9D7E3] overflow-hidden">
-          <div className="flex border-b border-[#C9D7E3] bg-[#F8FAFC] text-[12px] font-black uppercase">
-            <button
-              onClick={() => setActiveTab("card")}
-              className={`px-4 py-2.5 flex items-center gap-2 cursor-pointer transition-colors border-b-2 ${
-                activeTab === "card"
-                  ? "border-[#073F73] text-[#073F73] bg-white"
-                  : "border-transparent text-gray-500 hover:text-gray-800"
-              }`}
+              onClick={() => setIsIdModalOpen(true)}
+              className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-4 py-2.5 rounded-[3px] transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center gap-1.5 shrink-0"
             >
               <FaIdCard />
-              <span>Official ID Card</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("listings")}
-              className={`px-4 py-2.5 flex items-center gap-2 cursor-pointer transition-colors border-b-2 ${
-                activeTab === "listings"
-                  ? "border-[#073F73] text-[#073F73] bg-white"
-                  : "border-transparent text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              <FaHome />
-              <span>My Properties ({myListings.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("leads")}
-              className={`px-4 py-2.5 flex items-center gap-2 cursor-pointer transition-colors border-b-2 ${
-                activeTab === "leads"
-                  ? "border-[#073F73] text-[#073F73] bg-white"
-                  : "border-transparent text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              <FaUsers />
-              <span>Direct Leads ({myLeads.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("earnings")}
-              className={`px-4 py-2.5 flex items-center gap-2 cursor-pointer transition-colors border-b-2 ${
-                activeTab === "earnings"
-                  ? "border-[#073F73] text-[#073F73] bg-white"
-                  : "border-transparent text-gray-500 hover:text-gray-800"
-              }`}
-            >
-              <FaCoins />
-              <span>Commission & Payouts</span>
+              <span>Create & Save Green ID Card</span>
             </button>
           </div>
+        )}
 
-          <div className="p-5">
-            {/* Tab 1: Official ID Card */}
-            {activeTab === "card" && (
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                <div className="md:col-span-5 flex justify-center">
-                  <RealtorsMediaIdCard
-                    employee={currentEmployee}
-                    width={300}
-                    className="shadow-xl rounded-[6px]"
-                  />
-                </div>
+        {/* Official ID Card Showcase with Real-time Data */}
+        <div className="bg-white rounded-[4px] border border-[#C9D7E3] p-5 sm:p-6 shadow-xs">
+          {isProfileComplete ? (
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+              {/* Left Column: Official CR80 ID Card Preview (Green Tier) */}
+              <div className="md:col-span-5 flex flex-col items-center">
+                <RealtorsMediaIdCard
+                  employee={currentEmployee}
+                  theme={resolvedTier}
+                  width={300}
+                  className="shadow-xl rounded-[6px]"
+                />
+                <p className="text-[10.5px] text-gray-400 font-semibold mt-2.5 text-center">
+                  Live CR80 Digital & Physical Credential Match • {resolvedTier.toUpperCase()} TIER
+                </p>
+              </div>
 
-                <div className="md:col-span-7 space-y-4">
+              {/* Right Column: Member Real-time Details */}
+              <div className="md:col-span-7 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
                   <div>
-                    <span className="bg-[#E7F6EA] text-[#168A3A] text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                      CR80 Standard Physical & Digital Card
+                    <span className="bg-[#E7F6EA] text-[#168A3A] text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      ✓ Authenticated & Verified Member ({resolvedTier.toUpperCase()} TIER)
                     </span>
-                    <h3 className="text-lg font-black text-[#073F73] mt-1">
-                      {currentEmployee.name} - Official Identity Card
-                    </h3>
-                    <p className="text-[12px] text-gray-600 leading-relaxed mt-1">
-                      Your identity card is linked with the national Realtors Media database. Clients and prospective buyers can scan the QR code to verify your credentials, license status, and company ties.
+                    <h2 className="text-xl sm:text-2xl font-black text-[#073F73] mt-1">
+                      {currentEmployee.name}
+                    </h2>
+                    <p className="text-xs text-gray-500 font-semibold">
+                      {currentEmployee.designation} • {currentEmployee.department}
                     </p>
                   </div>
 
-                  <div className="bg-[#F8FAFC] p-3.5 rounded-[4px] border border-[#CBD5E1] space-y-2 text-[12px]">
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Employee / Member ID:</span>
-                      <strong className="text-[#073F73]">{currentEmployee.employeeId}</strong>
+                  <button
+                    onClick={() => setIsIdModalOpen(true)}
+                    className="self-start sm:self-center bg-gray-100 hover:bg-gray-200 text-[#073F73] text-[11px] font-bold px-3 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <FaEdit className="text-[10px]" />
+                    <span>Edit ID Card</span>
+                  </button>
+                </div>
+
+                <div className="bg-[#F8FAFC] p-4 rounded-[4px] border border-[#CBD5E1] space-y-2 text-[12px]">
+                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                    <span className="text-gray-500">Employee / Member ID:</span>
+                    <strong className="text-[#073F73] font-bold">{currentEmployee.employeeId}</strong>
+                  </div>
+                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                    <span className="text-gray-500">Full Name:</span>
+                    <strong className="text-gray-800">{currentEmployee.name}</strong>
+                  </div>
+                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                    <span className="text-gray-500">Official Mobile:</span>
+                    <strong className="text-gray-800">{currentEmployee.phone || "Not Set"}</strong>
+                  </div>
+                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                    <span className="text-gray-500">Registered Email:</span>
+                    <strong className="text-gray-800">{currentEmployee.email}</strong>
+                  </div>
+                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                    <span className="text-gray-500">Operating Area:</span>
+                    <strong className="text-gray-800">{currentEmployee.location || "India"}</strong>
+                  </div>
+                  {currentEmployee.agencyName && (
+                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                      <span className="text-gray-500">Agency / Brokerage:</span>
+                      <strong className="text-gray-800">{currentEmployee.agencyName}</strong>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Department / Wing:</span>
-                      <strong className="text-gray-800">{currentEmployee.department}</strong>
+                  )}
+                  {currentEmployee.specialization && (
+                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                      <span className="text-gray-500">Specialization:</span>
+                      <strong className="text-gray-800">{currentEmployee.specialization}</strong>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Official Mobile:</span>
-                      <strong className="text-gray-800">{currentEmployee.phone}</strong>
+                  )}
+                  {currentEmployee.licenseNumber && (
+                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                      <span className="text-gray-500">License / RERA:</span>
+                      <strong className="text-gray-800">{currentEmployee.licenseNumber}</strong>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Registered Email:</span>
-                      <strong className="text-gray-800">{currentEmployee.email}</strong>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Operating Area:</span>
-                      <strong className="text-gray-800">{currentEmployee.location}</strong>
-                    </div>
-                    {currentEmployee.agencyName && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Agency / Brokerage:</span>
-                        <strong className="text-gray-800">{currentEmployee.agencyName}</strong>
-                      </div>
-                    )}
-                    {currentEmployee.specialization && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">Specialization:</span>
-                        <strong className="text-gray-800">{currentEmployee.specialization}</strong>
-                      </div>
-                    )}
-                    {currentEmployee.licenseNumber && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-500">License / RERA:</span>
-                        <strong className="text-gray-800">{currentEmployee.licenseNumber}</strong>
-                      </div>
-                    )}
-                    <div className="flex justify-between">
+                  )}
+                  {currentEmployee.issuedDate && (
+                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
                       <span className="text-gray-500">Issuance Date:</span>
                       <strong className="text-gray-800">{currentEmployee.issuedDate}</strong>
                     </div>
-                    <div className="flex justify-between">
+                  )}
+                  {currentEmployee.validTill && (
+                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
                       <span className="text-gray-500">Valid Through:</span>
                       <strong className="text-emerald-700">{currentEmployee.validTill}</strong>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-500">Verification URL:</span>
-                      <Link
-                        href={`/verify/${currentEmployee.employeeId}`}
-                        className="text-[#073F73] font-bold underline truncate max-w-[200px]"
-                      >
-                        {currentEmployee.verificationUrl}
-                      </Link>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2.5 pt-2">
+                  )}
+                  <div className="flex justify-between py-0.5">
+                    <span className="text-gray-500">Public QR Verification:</span>
                     <Link
                       href={`/verify/${currentEmployee.employeeId}`}
-                      className="bg-[#073F73] hover:bg-[#06345F] text-white text-[11.5px] font-bold px-4 py-2 rounded-[3px] transition-colors flex items-center gap-1.5"
+                      className="text-[#073F73] font-bold underline truncate max-w-[220px]"
                     >
-                      <FaEye />
-                      <span>Test QR Verification Page</span>
+                      {currentEmployee.verificationUrl}
                     </Link>
-                    <button
-                      onClick={() => alert("Digital ID card downloaded successfully as PNG!")}
-                      className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-[11.5px] font-bold px-4 py-2 rounded-[3px] transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <FaDownload />
-                      <span>Download HD PNG</span>
-                    </button>
                   </div>
                 </div>
-              </div>
-            )}
 
-            {/* Tab 2: My Listings */}
-            {activeTab === "listings" && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-[13px] font-black uppercase text-[#073F73]">
-                    Your Published Properties
-                  </h4>
+                <div className="flex flex-wrap items-center gap-3 pt-2">
                   <Link
-                    href="/post-property"
-                    className="bg-[#E21F2F] hover:bg-[#c91826] text-white text-[11px] font-bold px-3 py-1.5 rounded-[3px] transition-colors flex items-center gap-1"
+                    href={`/verify/${currentEmployee.employeeId}`}
+                    className="bg-[#073F73] hover:bg-[#06345F] text-white text-xs font-bold px-4 py-2 rounded-[3px] transition-colors flex items-center gap-1.5 shadow-xs"
                   >
-                    <FaPlus className="text-[9px]" />
-                    <span>Add New Listing</span>
+                    <FaEye />
+                    <span>Open Public Verification Page</span>
                   </Link>
-                </div>
-
-                <div className="divide-y divide-gray-100 border border-gray-200 rounded-[4px] overflow-hidden">
-                  {myListings.map((item) => (
-                    <div
-                      key={item.id}
-                      className="p-3.5 bg-white hover:bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-[12px]"
-                    >
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="bg-[#EEF6FC] text-[#073F73] text-[9.5px] font-black px-1.5 py-0.2 rounded-xs uppercase">
-                            {item.category}
-                          </span>
-                          <span className="bg-emerald-50 text-emerald-700 text-[9.5px] font-bold px-1.5 py-0.2 rounded-xs">
-                            ● {item.status}
-                          </span>
-                        </div>
-                        <h5 className="font-bold text-[#143B5D] text-[13px]">{item.title}</h5>
-                        <p className="text-gray-500 text-[11px] mt-0.5">
-                          📍 {item.location} • <strong className="text-[#073F73]">{item.price}</strong>
-                        </p>
-                      </div>
-
-                      <div className="flex items-center gap-4 text-gray-500 text-[11.5px]">
-                        <span>
-                          👁️ <strong>{item.views}</strong> views
-                        </span>
-                        <span>
-                          📩 <strong>{item.leads}</strong> leads
-                        </span>
-                        <Link
-                          href="/properties"
-                          className="bg-[#073F73] text-white px-2.5 py-1 rounded-[3px] text-[11px] font-bold hover:bg-[#06345F]"
-                        >
-                          View Live
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tab 3: Direct Leads */}
-            {activeTab === "leads" && (
-              <div className="space-y-4">
-                <h4 className="text-[13px] font-black uppercase text-[#073F73]">
-                  Direct Buyer & Tenant Inquiries
-                </h4>
-                <div className="overflow-x-auto border border-gray-200 rounded-[4px]">
-                  <table className="w-full text-left text-[12px] text-[#143B5D]">
-                    <thead className="bg-[#EEF6FC] text-[#073F73] text-[11px] font-black uppercase border-b border-gray-200">
-                      <tr>
-                        <th className="py-2 px-3">Lead Name</th>
-                        <th className="py-2 px-3">Phone</th>
-                        <th className="py-2 px-3">Inquired Property</th>
-                        <th className="py-2 px-3">Budget</th>
-                        <th className="py-2 px-3">Time</th>
-                        <th className="py-2 px-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-100">
-                      {myLeads.map((lead) => (
-                        <tr key={lead.id} className="hover:bg-gray-50">
-                          <td className="py-2.5 px-3 font-bold text-[#073F73]">{lead.name}</td>
-                          <td className="py-2.5 px-3">{lead.phone}</td>
-                          <td className="py-2.5 px-3">{lead.property}</td>
-                          <td className="py-2.5 px-3 font-semibold text-emerald-700">{lead.budget}</td>
-                          <td className="py-2.5 px-3 text-gray-400 text-[11px]">{lead.date}</td>
-                          <td className="py-2.5 px-3">
-                            <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200">
-                              {lead.status}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Tab 4: Earnings */}
-            {activeTab === "earnings" && (
-              <div className="space-y-4 max-w-xl text-[12px]">
-                <h4 className="text-[13px] font-black uppercase text-[#073F73]">
-                  Commission Tier & Payout Statement
-                </h4>
-                <div className="bg-[#F8FAFC] border border-[#CBD5E1] p-4 rounded-[4px] space-y-3">
-                  <div className="flex justify-between items-center pb-2 border-b border-gray-200">
-                    <span className="font-bold text-gray-600">Current Plan:</span>
-                    <span className="text-[#073F73] font-black uppercase">Executive Blue Tier (₹ 2,000)</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-2 border-b border-gray-200">
-                    <span className="font-bold text-gray-600">Commission Rate:</span>
-                    <span className="text-[#168A3A] font-black text-[14px]">30% on Closings*</span>
-                  </div>
-                  <div className="flex justify-between items-center pb-2 border-b border-gray-200">
-                    <span className="font-bold text-gray-600">Total Closings to Date:</span>
-                    <span className="font-bold text-gray-800">4 Deals (₹ 6.20 Cr GMV)</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-gray-600">Paid Out Commissions:</span>
-                    <span className="text-[#073F73] font-black text-[14px]">₹ 3,72,000</span>
-                  </div>
-                </div>
-
-                <div className="bg-amber-50 border border-amber-200 p-3 rounded-[4px] text-[11px] text-amber-900 flex items-center justify-between">
-                  <span>Upgrade to <strong>VIP Elite Orange Tier</strong> to unlock 50% deal commission payout.</span>
-                  <Link
-                    href="/register"
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-2.5 py-1 rounded-[3px] uppercase ml-2 flex-shrink-0"
+                  <button
+                    onClick={() => setIsIdModalOpen(true)}
+                    className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-bold px-4 py-2 rounded-[3px] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
-                    Upgrade Tier
-                  </Link>
+                    <FaDownload />
+                    <span>Download / Print Card</span>
+                  </button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="text-center py-10 space-y-4 max-w-lg mx-auto">
+              <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#168A3A] border border-emerald-200 flex items-center justify-center mx-auto text-2xl shadow-xs">
+                <FaIdCard />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-[#073F73]">
+                  No Official ID Card in Database Yet
+                </h3>
+                <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                  Your account is logged in as <strong>{user.email}</strong>, but your ID card has not been registered in the database. Enter your name, mobile number, and upload your photo to store your verified Green ID card and activate QR scanning.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsIdModalOpen(true)}
+                className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-6 py-3 rounded-[3px] transition-colors cursor-pointer shadow-md inline-flex items-center gap-2"
+              >
+                <FaIdCard />
+                <span>Create & Register Green ID Card Now</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* ID Card Modal to enter details, upload photo and save to Firestore */}
+      <IdCardModal
+        isOpen={isIdModalOpen}
+        onClose={() => setIsIdModalOpen(false)}
+        initialEmployee={isProfileComplete ? currentEmployee : undefined}
+        initialTier={resolvedTier}
+      />
     </PortalLayout>
   );
 }

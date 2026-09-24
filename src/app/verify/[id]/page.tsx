@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { PortalLayout } from "@/components/layout/PortalLayout";
-import { realtorsEmployees } from "@/data/portalData";
 import { RealtorsMediaIdCard } from "@/components/ui/RealtorsMediaIdCard";
 import { RealtorsMediaEmployee } from "@/types";
 import { getIdCardRecord, getMemberByEmployeeId } from "@/lib/firebase/db";
@@ -25,8 +24,8 @@ import {
 
 export default function VerifyPage() {
   const params = useParams();
-  const rawId = (params?.id as string) || "RM-C-1111";
-  const decodedId = decodeURIComponent(rawId).trim();
+  const rawId = (params?.id as string) || "";
+  const decodedId = rawId ? decodeURIComponent(rawId).trim() : "";
 
   const [isLoading, setIsLoading] = useState(true);
   const [isVerified, setIsVerified] = useState<boolean | null>(null);
@@ -34,25 +33,32 @@ export default function VerifyPage() {
 
   useEffect(() => {
     async function verifyCredential() {
+      if (!decodedId) {
+        setIsLoading(false);
+        setIsVerified(false);
+        setEmployee(null);
+        return;
+      }
+
       setIsLoading(true);
 
       try {
-        // 1. Check Firestore `idCards` collection
+        // 1. Check Firestore `idCards` collection (Real-time live database)
         const idCardDoc = await getIdCardRecord(decodedId);
         if (idCardDoc) {
           setEmployee({
-            name: idCardDoc.fullName || idCardDoc.name || "Verified Member",
+            name: idCardDoc.fullName || idCardDoc.name || "",
             designation: idCardDoc.designation || "VERIFIED REALTOR",
             employeeId: idCardDoc.employeeId,
             department: idCardDoc.department || "Property Sales & Channel",
-            location: idCardDoc.location || "Hyderabad, Telangana",
-            issuedDate: idCardDoc.issuedDate || "24 SEP 2026",
-            validTill: idCardDoc.validTill || "23 SEP 2028",
-            photo: idCardDoc.photoUrl || idCardDoc.photo || "/images/realtor_ramnath.jpg",
-            verificationUrl: idCardDoc.verificationUrl || `https://realtorsmedia.com/verify/${idCardDoc.employeeId}`,
+            location: idCardDoc.location || "India",
+            issuedDate: idCardDoc.issuedDate || "",
+            validTill: idCardDoc.validTill || "",
+            photo: idCardDoc.photoUrl || idCardDoc.photo || "/images/rohan_deshmukh.png",
+            verificationUrl: idCardDoc.verificationUrl || `https://realtorsmedia.world/verify/${idCardDoc.employeeId}`,
             theme: (idCardDoc.cardTier === "orange" || idCardDoc.cardTier === "red" ? "orange" : idCardDoc.cardTier === "green" ? "green" : "blue") as any,
-            phone: idCardDoc.phone || idCardDoc.mobile || "+91 98490 12345",
-            email: idCardDoc.email || "member@realtorsmedia.com",
+            phone: idCardDoc.phone || idCardDoc.mobile || "",
+            email: idCardDoc.email || "",
             agencyName: idCardDoc.agencyName || "",
             licenseNumber: idCardDoc.licenseNumber || "",
             specialization: idCardDoc.specialization || "Residential Properties",
@@ -63,22 +69,22 @@ export default function VerifyPage() {
           return;
         }
 
-        // 2. Check Firestore `members` collection
+        // 2. Check Firestore `members` collection (Real-time live database)
         const memberDoc = await getMemberByEmployeeId(decodedId);
         if (memberDoc) {
           setEmployee({
-            name: memberDoc.fullName || memberDoc.name || "Verified Member",
+            name: memberDoc.fullName || memberDoc.name || "",
             designation: memberDoc.designation || "VERIFIED REALTOR",
             employeeId: memberDoc.employeeId,
             department: memberDoc.department || "Property Sales & Channel",
-            location: memberDoc.location || (memberDoc.city ? `${memberDoc.city}, ${memberDoc.state || "India"}` : "Hyderabad, Telangana"),
-            issuedDate: memberDoc.issuedDate || "24 SEP 2026",
-            validTill: memberDoc.validTill || "23 SEP 2028",
-            photo: memberDoc.photoUrl || memberDoc.photo || "/images/realtor_ramnath.jpg",
-            verificationUrl: memberDoc.verificationUrl || `https://realtorsmedia.com/verify/${memberDoc.employeeId}`,
+            location: memberDoc.location || (memberDoc.city ? `${memberDoc.city}, ${memberDoc.state || "India"}` : "India"),
+            issuedDate: memberDoc.issuedDate || "",
+            validTill: memberDoc.validTill || "",
+            photo: memberDoc.photoUrl || memberDoc.photo || "/images/rohan_deshmukh.png",
+            verificationUrl: memberDoc.verificationUrl || `https://realtorsmedia.world/verify/${memberDoc.employeeId}`,
             theme: (((memberDoc.selectedTier as string) === "orange" || (memberDoc.selectedTier as string) === "red") ? "orange" : memberDoc.selectedTier === "green" ? "green" : "blue") as any,
-            phone: memberDoc.phone || memberDoc.mobile || "+91 98490 12345",
-            email: memberDoc.email || "member@realtorsmedia.com",
+            phone: memberDoc.phone || memberDoc.mobile || "",
+            email: memberDoc.email || "",
             agencyName: memberDoc.agencyName || memberDoc.companyName || "",
             licenseNumber: memberDoc.licenseNumber || memberDoc.reraNo || "",
             specialization: memberDoc.specialization || "Residential Properties",
@@ -89,54 +95,12 @@ export default function VerifyPage() {
           return;
         }
 
-        // 3. Check client localStorage (for immediate testing/demo)
-        if (typeof window !== "undefined") {
-          const stored = localStorage.getItem("rm_last_member");
-          if (stored) {
-            try {
-              const parsed = JSON.parse(stored);
-              if (parsed.employeeId && parsed.employeeId.toLowerCase() === decodedId.toLowerCase()) {
-                setEmployee({
-                  name: parsed.name || parsed.fullName || "Verified Member",
-                  designation: parsed.designation || "VERIFIED REALTOR",
-                  employeeId: parsed.employeeId,
-                  department: parsed.department || "Property Sales & Channel",
-                  location: parsed.location || "Hyderabad, Telangana",
-                  issuedDate: parsed.issuedDate || "24 SEP 2026",
-                  validTill: parsed.validTill || "23 SEP 2028",
-                  photo: parsed.photo || parsed.photoUrl || "/images/realtor_ramnath.jpg",
-                  verificationUrl: `https://realtorsmedia.com/verify/${parsed.employeeId}`,
-                  theme: (parsed.tier === "orange" || parsed.tier === "red" ? "orange" : parsed.tier === "green" ? "green" : "blue") as any,
-                  phone: parsed.phone || parsed.mobile || "+91 98490 12345",
-                  email: parsed.email || "member@realtorsmedia.com",
-                  agencyName: parsed.agencyName || parsed.companyName || "",
-                  licenseNumber: parsed.licenseNumber || "",
-                  specialization: parsed.specialization || "Residential Properties",
-                  experience: parsed.experience || "",
-                });
-                setIsVerified(true);
-                setIsLoading(false);
-                return;
-              }
-            } catch {}
-          }
-        }
-
-        // 4. Check preset system demos in realtorsEmployees
-        const matchedPreset = realtorsEmployees.find(
-          (e) => e.employeeId.toLowerCase() === decodedId.toLowerCase()
-        );
-        if (matchedPreset) {
-          setEmployee(matchedPreset);
-          setIsVerified(true);
-          setIsLoading(false);
-          return;
-        }
-
-        // If not found in any official database -> UNVERIFIED
+        // If not in Firestore database -> NOT VERIFIED (No hardcoded fallback data)
+        setEmployee(null);
         setIsVerified(false);
       } catch (err) {
         console.error("Verification lookup error:", err);
+        setEmployee(null);
         setIsVerified(false);
       } finally {
         setIsLoading(false);

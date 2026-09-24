@@ -219,7 +219,6 @@ export const UniqueIdCards: React.FC = () => {
       <IdCardModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        initialEmployee={selectedEmployee}
         initialTier={selectedTier}
       />
     </div>

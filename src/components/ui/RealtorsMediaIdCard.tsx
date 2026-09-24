@@ -190,13 +190,17 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
     };
   }, []);
 
-  const mergedEmployee: RealtorsMediaEmployee = {
-    ...DEFAULT_EMPLOYEE,
-    ...employee,
-  };
+  const empTierFromId = employee?.employeeId?.startsWith("RM-C")
+    ? "green"
+    : employee?.employeeId?.startsWith("RM-A")
+    ? "orange"
+    : employee?.employeeId?.startsWith("RM-B")
+    ? "blue"
+    : undefined;
 
-  const activeThemeKey = theme || mergedEmployee.theme || "blue";
-  const currentTheme = THEME_CONFIGS[activeThemeKey] || THEME_CONFIGS.blue;
+  const mergedEmployee = employee;
+  const activeThemeKey = theme || employee?.theme || empTierFromId || "green";
+  const currentTheme = THEME_CONFIGS[activeThemeKey] || THEME_CONFIGS.green;
   const gradientPrefix = id.replace(/[^a-zA-Z0-9_-]/g, "");
 
   return (

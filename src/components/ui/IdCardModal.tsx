@@ -30,6 +30,7 @@ import { RealtorsMediaEmployee } from "@/types";
 import { realtorsEmployees, cardTierPlans } from "@/data/portalData";
 import { useAuth } from "@/context/AuthContext";
 import { registerMember } from "@/lib/firebase/auth";
+import { updateProfile } from "firebase/auth";
 import { getNextEmployeeId, peekNextEmployeeId, saveMemberProfile, saveIdCardRecord } from "@/lib/firebase/db";
 import { uploadMemberPhoto, compressImage } from "@/lib/firebase/storage";
 
@@ -76,7 +77,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   isOpen,
   onClose,
   initialEmployee,
-  initialTier = "blue",
+  initialTier = "green",
 }) => {
   const router = useRouter();
   const { user, memberProfile, refreshProfile } = useAuth();
@@ -87,18 +88,28 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
   // Form state including Create & Confirm Password
   const [formData, setFormData] = useState({
-    name: initialEmployee?.name || memberProfile?.fullName || "Rohan Deshmukh",
-    mobile: initialEmployee?.phone || memberProfile?.phone || "+91 98765 43210",
-    email: initialEmployee?.email || memberProfile?.email || user?.email || "rohan.d@realtorsmedia.com",
-    location: initialEmployee?.location || (memberProfile ? `${memberProfile.city}, ${memberProfile.state}` : "Pune, Maharashtra"),
+    name:
+      initialEmployee?.name ||
+      memberProfile?.fullName ||
+      (user?.displayName && user.displayName !== "Verified Member" ? user.displayName : "") ||
+      "",
+    mobile: initialEmployee?.phone || memberProfile?.phone || "",
+    email: initialEmployee?.email || memberProfile?.email || user?.email || "",
+    location:
+      initialEmployee?.location ||
+      (memberProfile ? `${memberProfile.city}, ${memberProfile.state}` : ""),
     agencyName: initialEmployee?.agencyName || memberProfile?.companyName || "",
-    licenseNumber: initialEmployee?.licenseNumber || initialEmployee?.reraNumber || memberProfile?.reraNo || "",
+    licenseNumber:
+      initialEmployee?.licenseNumber ||
+      initialEmployee?.reraNumber ||
+      memberProfile?.reraNo ||
+      "",
     experience: initialEmployee?.experience || memberProfile?.experienceYears || "",
-    specialization: initialEmployee?.specialization || memberProfile?.specialization || "",
-    photo: initialEmployee?.photo || memberProfile?.photoUrl || user?.photoURL || "/images/rohan_deshmukh.png",
-    employeeId: initialEmployee?.employeeId || memberProfile?.employeeId || `${TIER_PREFIX_MAP[initialTier] || "RM-B"}-1111`,
-    issuedDate: initialEmployee?.issuedDate || memberProfile?.issuedDate || "24 SEP 2026",
-    validTill: initialEmployee?.validTill || memberProfile?.validTill || "23 SEP 2028",
+    specialization: initialEmployee?.specialization || memberProfile?.specialization || "Residential Properties",
+    photo: initialEmployee?.photo || memberProfile?.photoUrl || user?.photoURL || "",
+    employeeId: initialEmployee?.employeeId || memberProfile?.employeeId || "",
+    issuedDate: initialEmployee?.issuedDate || memberProfile?.issuedDate || "",
+    validTill: initialEmployee?.validTill || memberProfile?.validTill || "",
     designation: initialEmployee?.designation || memberProfile?.designation || "VERIFIED REALTOR",
     department: initialEmployee?.department || memberProfile?.department || "Property Sales & Channel",
     password: "",
@@ -144,24 +155,51 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   }, [isOpen, selectedTier, initialEmployee]);
 
   useEffect(() => {
-    if (initialEmployee) {
+    if (isOpen) {
       setFormData((prev) => ({
         ...prev,
-        name: initialEmployee.name,
-        location: initialEmployee.location,
-        photo: initialEmployee.photo || prev.photo,
-        mobile: initialEmployee.phone || prev.mobile,
-        email: initialEmployee.email || prev.email,
-        employeeId: initialEmployee.employeeId || prev.employeeId,
-        agencyName: initialEmployee.agencyName || prev.agencyName,
-        licenseNumber: initialEmployee.licenseNumber || initialEmployee.reraNumber || prev.licenseNumber,
-        experience: initialEmployee.experience || prev.experience,
-        specialization: initialEmployee.specialization || prev.specialization,
-        designation: initialEmployee.designation || prev.designation,
-        department: initialEmployee.department || prev.department,
+        email:
+          prev.email && prev.email !== "rohan.d@realtorsmedia.com"
+            ? prev.email
+            : initialEmployee?.email || memberProfile?.email || user?.email || "",
+        name:
+          prev.name && prev.name !== "Rohan Deshmukh"
+            ? prev.name
+            : initialEmployee?.name ||
+              memberProfile?.fullName ||
+              (user?.displayName && user.displayName !== "Verified Member" ? user.displayName : "") ||
+              "",
+        mobile:
+          prev.mobile && prev.mobile !== "+91 98765 43210"
+            ? prev.mobile
+            : initialEmployee?.phone || memberProfile?.phone || "",
+        location:
+          prev.location && prev.location !== "Pune, Maharashtra"
+            ? prev.location
+            : initialEmployee?.location ||
+              (memberProfile ? `${memberProfile.city}, ${memberProfile.state}` : prev.location),
+        agencyName:
+          prev.agencyName || initialEmployee?.agencyName || memberProfile?.companyName || "",
+        licenseNumber:
+          prev.licenseNumber ||
+          initialEmployee?.licenseNumber ||
+          initialEmployee?.reraNumber ||
+          memberProfile?.reraNo ||
+          "",
+        specialization:
+          prev.specialization || initialEmployee?.specialization || memberProfile?.specialization || "",
+        experience:
+          prev.experience || initialEmployee?.experience || memberProfile?.experienceYears || "",
+        photo:
+          prev.photo && prev.photo !== "/images/rohan_deshmukh.png"
+            ? prev.photo
+            : initialEmployee?.photo || memberProfile?.photoUrl || user?.photoURL || "/images/rohan_deshmukh.png",
+        employeeId: initialEmployee?.employeeId || memberProfile?.employeeId || prev.employeeId,
+        designation: initialEmployee?.designation || memberProfile?.designation || prev.designation,
+        department: initialEmployee?.department || memberProfile?.department || prev.department,
       }));
     }
-  }, [initialEmployee]);
+  }, [isOpen, user, memberProfile, initialEmployee]);
 
   // Handle ESC key to close
   useEffect(() => {
@@ -378,10 +416,21 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     setIsSubmitting(true);
 
     try {
-      // Increment sequential counter atomically: 1111 -> 1112 -> 1113...
-      const nextSequentialId = await getNextEmployeeId(selectedTier);
+      // Dynamic Database-Driven Sequential Employee ID Generator
+      // If member already has an official ID registered in Firestore (and hasn't regenerated), preserve it.
+      // Otherwise, query database for highest existing sequence, atomically increment, and guarantee zero duplicates.
+      const nextSequentialId =
+        memberProfile?.employeeId && formData.employeeId === memberProfile.employeeId
+          ? memberProfile.employeeId
+          : await getNextEmployeeId(selectedTier);
 
-      // Compress and upload photo to Firebase Storage
+      const origin =
+        typeof window !== "undefined" && window.location.origin
+          ? window.location.origin
+          : "https://realtorsmedia.world";
+      const dynamicVerificationUrl = `${origin}/verify/${nextSequentialId}`;
+
+      // Compress and upload photo to Firebase Storage (authorized by deployed rules)
       let finalPhotoUrl = formData.photo;
       try {
         finalPhotoUrl = await uploadMemberPhoto(formData.photo, user?.uid || nextSequentialId);
@@ -437,7 +486,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           issuedDate: profile.issuedDate || issuedDate,
           validTill: profile.validTill || validTill,
           status: "ACTIVE",
-          verificationUrl: `https://realtorsmedia.com/verify/${nextSequentialId}`,
+          verificationUrl: dynamicVerificationUrl,
           uid: newUser.uid,
         });
 
@@ -464,7 +513,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
             department: formData.department || "Property Sales & Channel",
             issuedDate: profile.issuedDate || issuedDate,
             validTill: profile.validTill || validTill,
-            verificationUrl: `https://realtorsmedia.com/verify/${nextSequentialId}`,
+            verificationUrl: dynamicVerificationUrl,
           };
           localStorage.setItem("rm_last_member", JSON.stringify(memberPayload));
           localStorage.setItem("rm_member_profile", JSON.stringify(memberPayload));
@@ -482,11 +531,26 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         }, 1200);
       } else {
         // User already logged in, update profile with sequential ID in Firestore
+        const safeAuthPhotoUrl =
+          finalPhotoUrl && !finalPhotoUrl.startsWith("data:") && finalPhotoUrl.length < 2048
+            ? finalPhotoUrl
+            : undefined;
+
+        try {
+          await updateProfile(user, {
+            displayName: formData.name,
+            ...(safeAuthPhotoUrl ? { photoURL: safeAuthPhotoUrl } : {}),
+          });
+        } catch (profileErr) {
+          console.warn("Auth updateProfile warning:", profileErr);
+        }
+
         await saveMemberProfile(user.uid, {
           fullName: formData.name,
           name: formData.name,
           phone: formData.mobile,
           mobile: formData.mobile,
+          email: formData.email || user.email || "",
           city: formData.location.split(",")[0]?.trim() || formData.location,
           state: formData.location.split(",")[1]?.trim() || "India",
           location: formData.location,
@@ -502,6 +566,10 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           employeeId: nextSequentialId,
           photoUrl: finalPhotoUrl,
           photo: finalPhotoUrl,
+          department: formData.department || "Property Sales & Channel",
+          designation: formData.designation || "VERIFIED REALTOR",
+          verificationUrl: dynamicVerificationUrl,
+          status: "ACTIVE",
           issuedDate,
           validTill,
         });
@@ -512,7 +580,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           name: formData.name,
           phone: formData.mobile,
           mobile: formData.mobile,
-          email: formData.email,
+          email: formData.email || user.email || "",
           location: formData.location,
           agencyName: formData.agencyName,
           licenseNumber: formData.licenseNumber,
@@ -526,7 +594,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           issuedDate,
           validTill,
           status: "ACTIVE",
-          verificationUrl: `https://realtorsmedia.com/verify/${nextSequentialId}`,
+          verificationUrl: dynamicVerificationUrl,
           uid: user.uid,
         });
 
@@ -537,7 +605,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
             employeeId: nextSequentialId,
             phone: formData.mobile,
             mobile: formData.mobile,
-            email: formData.email,
+            email: formData.email || user.email,
             location: formData.location,
             agencyName: formData.agencyName,
             companyName: formData.agencyName,
@@ -552,7 +620,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
             department: formData.department || "Property Sales & Channel",
             issuedDate,
             validTill,
-            verificationUrl: `https://realtorsmedia.com/verify/${nextSequentialId}`,
+            verificationUrl: dynamicVerificationUrl,
           };
           localStorage.setItem("rm_last_member", JSON.stringify(memberPayload));
           localStorage.setItem("rm_member_profile", JSON.stringify(memberPayload));
@@ -572,7 +640,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       console.error("ID Card generation error:", err);
       let msg = "Could not complete registration. Please check your details.";
       if (err.code === "auth/email-already-in-use") {
-        msg = "This email is already registered. Please log in from the member portal.";
+        msg = "This email is already registered. Please enter your existing password to update your ID card.";
       } else if (err.code === "auth/weak-password") {
         msg = "Password should be at least 6 characters.";
       } else if (err.message) {

@@ -6,9 +6,6 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
-    }
 
     // ========================================================
     // 1. MEMBERS COLLECTION (`members/{memberId}`)

@@ -86,6 +86,18 @@ export async function uploadMemberPhoto(
   fileOrDataUrl: File | string,
   memberIdOrUid: string
 ): Promise<string> {
+  // If already an HTTP/HTTPS URL or local path, return immediately without re-uploading
+  if (typeof fileOrDataUrl === "string") {
+    if (!fileOrDataUrl) return "/images/realtor_ramnath.jpg";
+    if (
+      fileOrDataUrl.startsWith("http://") ||
+      fileOrDataUrl.startsWith("https://") ||
+      fileOrDataUrl.startsWith("/")
+    ) {
+      return fileOrDataUrl;
+    }
+  }
+
   const timestamp = Date.now();
   const storagePath = `members/${memberIdOrUid}/id_photo_${timestamp}.jpg`;
   const storageRef = ref(storage, storagePath);
@@ -131,6 +143,17 @@ export async function uploadPropertyImage(
   propertyId: string,
   fileName?: string
 ): Promise<string> {
+  if (typeof fileOrDataUrl === "string") {
+    if (!fileOrDataUrl) return "";
+    if (
+      fileOrDataUrl.startsWith("http://") ||
+      fileOrDataUrl.startsWith("https://") ||
+      fileOrDataUrl.startsWith("/")
+    ) {
+      return fileOrDataUrl;
+    }
+  }
+
   const fileExt = fileName ? fileName.split(".").pop() : "jpg";
   const uniqueName = `image_${Date.now()}.${fileExt}`;
   const storagePath = `properties/${propertyId}/${uniqueName}`;

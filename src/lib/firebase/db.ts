@@ -131,20 +131,74 @@ export async function saveMemberProfile(uid: string, data: Partial<MemberProfile
   );
 }
 
-export async function getMemberProfile(uid: string): Promise<MemberProfileData | null> {
+export async function getMemberProfile(uid: string, email?: string | null): Promise<MemberProfileData | null> {
   const memberRef = doc(db, "members", uid);
   const snap = await getDoc(memberRef);
   if (snap.exists()) {
     return snap.data() as MemberProfileData;
   }
+
+  // Fallback 1: Query members collection where uid == uid
+  try {
+    const qUid = query(collection(db, "members"), where("uid", "==", uid), limit(1));
+    const snapUid = await getDocs(qUid);
+    if (!snapUid.empty) {
+      return snapUid.docs[0].data() as MemberProfileData;
+    }
+  } catch {}
+
+  // Fallback 2: Query members collection by email
+  if (email) {
+    try {
+      const qEmail = query(collection(db, "members"), where("email", "==", email), limit(1));
+      const snapEmail = await getDocs(qEmail);
+      if (!snapEmail.empty) {
+        return snapEmail.docs[0].data() as MemberProfileData;
+      }
+    } catch {}
+  }
+
+  // Fallback 3: Query idCards collection by email
+  if (email) {
+    try {
+      const qCard = query(collection(db, "idCards"), where("email", "==", email), limit(1));
+      const cardSnap = await getDocs(qCard);
+      if (!cardSnap.empty) {
+        const d = cardSnap.docs[0].data();
+        const tier = (d.cardTier || (d.employeeId?.startsWith("RM-C") ? "green" : "blue")) as any;
+        return {
+          ...d,
+          uid,
+          fullName: d.fullName || d.name || "",
+          selectedTier: tier,
+          tier,
+        } as unknown as MemberProfileData;
+      }
+    } catch {}
+  }
+
   return null;
 }
 
 export async function getMemberByEmployeeId(employeeId: string): Promise<MemberProfileData | null> {
-  const q = query(collection(db, "members"), where("employeeId", "==", employeeId), limit(1));
-  const snap = await getDocs(q);
-  if (!snap.empty) {
-    return snap.docs[0].data() as MemberProfileData;
+  const cleanId = employeeId.trim();
+  const upperId = cleanId.toUpperCase();
+  try {
+    const q = query(
+      collection(db, "members"),
+      where("employeeId", "in", [cleanId, upperId, cleanId.toLowerCase()]),
+      limit(1)
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      return snap.docs[0].data() as MemberProfileData;
+    }
+  } catch {
+    const q = query(collection(db, "members"), where("employeeId", "==", cleanId), limit(1));
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      return snap.docs[0].data() as MemberProfileData;
+    }
   }
   return null;
 }
@@ -154,11 +208,13 @@ export async function getMemberByEmployeeId(employeeId: string): Promise<MemberP
 // ----------------------------------------------------
 
 export async function saveIdCardRecord(cardData: IdCardRecordData): Promise<void> {
-  const cardRef = doc(db, "idCards", cardData.employeeId);
+  const cleanId = cardData.employeeId.trim();
+  const cardRef = doc(db, "idCards", cleanId);
   await setDoc(
     cardRef,
     {
       ...cardData,
+      employeeId: cleanId,
       updatedAt: serverTimestamp(),
       createdAt: cardData.createdAt || serverTimestamp(),
     },
@@ -167,11 +223,36 @@ export async function saveIdCardRecord(cardData: IdCardRecordData): Promise<void
 }
 
 export async function getIdCardRecord(employeeId: string): Promise<IdCardRecordData | null> {
-  const cardRef = doc(db, "idCards", employeeId);
+  const cleanId = employeeId.trim();
+  const cardRef = doc(db, "idCards", cleanId);
   const snap = await getDoc(cardRef);
   if (snap.exists()) {
     return snap.data() as IdCardRecordData;
   }
+
+  // Also try uppercase if employeeId was lowercase
+  const upperId = cleanId.toUpperCase();
+  if (upperId !== cleanId) {
+    const upperRef = doc(db, "idCards", upperId);
+    const upperSnap = await getDoc(upperRef);
+    if (upperSnap.exists()) {
+      return upperSnap.data() as IdCardRecordData;
+    }
+  }
+
+  // Also query where employeeId == cleanId or upperId or lowerId
+  try {
+    const q = query(
+      collection(db, "idCards"),
+      where("employeeId", "in", [cleanId, upperId, cleanId.toLowerCase()]),
+      limit(1)
+    );
+    const querySnap = await getDocs(q);
+    if (!querySnap.empty) {
+      return querySnap.docs[0].data() as IdCardRecordData;
+    }
+  } catch {}
+
   return null;
 }
 
@@ -257,64 +338,222 @@ export async function getMemberLeads(memberUid: string): Promise<LeadInquiryData
 }
 
 // ----------------------------------------------------
-// Sequential ID Counter (Starts from 1111 -> 1112 -> 1113...)
+// Database-Driven Sequential Employee ID Generator
+// Checks Firestore `idCards`, `members`, and `counters`
+// Starts from 1111 -> 1112 -> 1113... without duplicates
 // ----------------------------------------------------
 
+export function getPrefixForTier(tier: "green" | "blue" | "orange" | "red" | string): string {
+  const t = (tier || "").toLowerCase();
+  if (t === "orange" || t === "red" || t === "rm-a") return "RM-A";
+  if (t === "blue" || t === "rm-b") return "RM-B";
+  return "RM-C"; // Default Green Tier
+}
+
+/**
+ * Queries Firestore to inspect the last generated ID card in the database
+ * and finds the highest sequence number currently registered.
+ * Checks across:
+ * 1. `idCards` collection (checks document IDs and `employeeId` fields)
+ * 2. `members` collection (checks `employeeId` fields)
+ * 3. `counters/memberSequence`
+ */
+export async function getLastGeneratedSequenceFromDatabase(targetPrefix?: string): Promise<number> {
+  let highest = 1110;
+
+  try {
+    // 1. Inspect all records in `idCards` collection
+    const idCardsSnap = await getDocs(collection(db, "idCards"));
+    idCardsSnap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const idsToCheck = [docSnap.id, data.employeeId, data.id].filter(Boolean);
+      for (const idStr of idsToCheck) {
+        if (typeof idStr === "string") {
+          // Extract numeric suffix from patterns like RM-C-1111 or raw numbers
+          const match = targetPrefix
+            ? idStr.match(new RegExp(`^${targetPrefix}-(\\d+)`, "i"))
+            : idStr.match(/RM-[A-C]-(\d+)/i) || idStr.match(/(\d{4,})$/);
+          if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num) && num > highest) {
+              highest = num;
+            }
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.warn("Could not inspect idCards collection for sequence:", err);
+  }
+
+  try {
+    // 2. Inspect all records in `members` collection
+    const membersSnap = await getDocs(collection(db, "members"));
+    membersSnap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const idsToCheck = [data.employeeId, data.memberId].filter(Boolean);
+      for (const idStr of idsToCheck) {
+        if (typeof idStr === "string") {
+          const match = targetPrefix
+            ? idStr.match(new RegExp(`^${targetPrefix}-(\\d+)`, "i"))
+            : idStr.match(/RM-[A-C]-(\d+)/i) || idStr.match(/(\d{4,})$/);
+          if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num) && num > highest) {
+              highest = num;
+            }
+          }
+        }
+      }
+    });
+  } catch (err) {
+    console.warn("Could not inspect members collection for sequence:", err);
+  }
+
+  try {
+    // 3. Inspect global and prefix-specific counters in `counters`
+    const counterSnap = await getDoc(doc(db, "counters", "memberSequence"));
+    if (counterSnap.exists()) {
+      const data = counterSnap.data();
+      const seq = typeof data.currentSequence === "number" ? data.currentSequence : 0;
+      if (seq > highest) {
+        highest = seq;
+      }
+    }
+  } catch (err) {
+    console.warn("Could not inspect counters document:", err);
+  }
+
+  // 4. Check client localStorage fallback
+  if (typeof window !== "undefined") {
+    const local = localStorage.getItem("rm_member_seq");
+    if (local) {
+      const parsed = parseInt(local, 10);
+      if (!isNaN(parsed) && parsed > highest) {
+        highest = parsed;
+      }
+    }
+  }
+
+  return highest;
+}
+
+/**
+ * Generates the next sequential employee ID for a new ID card.
+ * Queries the database for the last generated ID, increments the sequence,
+ * verifies that the candidate ID does not exist in `idCards` or `members`,
+ * updates the counter atomically, and returns the unique ID.
+ */
 export async function getNextEmployeeId(tier: "green" | "blue" | "orange" | "red" | string): Promise<string> {
-  const prefix = tier === "orange" || tier === "red" ? "RM-A" : tier === "blue" ? "RM-B" : "RM-C";
+  const prefix = getPrefixForTier(tier);
   const counterRef = doc(db, "counters", "memberSequence");
 
   try {
+    // 1. Query Firestore database for highest existing sequence
+    const highestInDb = await getLastGeneratedSequenceFromDatabase(prefix);
+
+    // 2. Atomically update counter in Firestore
     const nextSeq = await runTransaction(db, async (transaction) => {
       const counterSnap = await transaction.get(counterRef);
-      let current = 1110;
+      let current = highestInDb;
+
       if (counterSnap.exists()) {
         const data = counterSnap.data();
-        current = typeof data.currentSequence === "number" ? data.currentSequence : 1110;
+        const stored = typeof data.currentSequence === "number" ? data.currentSequence : 0;
+        if (stored > current) {
+          current = stored;
+        }
       }
-      const next = current + 1;
-      transaction.set(counterRef, { currentSequence: next, updatedAt: serverTimestamp() }, { merge: true });
-      return next;
+
+      const incremented = current + 1;
+      transaction.set(
+        counterRef,
+        {
+          currentSequence: incremented,
+          lastEmployeeId: `${prefix}-${incremented}`,
+          lastPrefix: prefix,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+      return incremented;
     });
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("rm_member_seq", nextSeq.toString());
-    }
-    return `${prefix}-${nextSeq}`;
-  } catch (err) {
-    console.warn("Transaction counter fallback:", err);
-    let next = 1111;
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("rm_member_seq");
-      if (stored) {
-        next = parseInt(stored, 10) + 1;
+    // 3. Guarantee absolutely no duplicates in Firestore `idCards`
+    let candidateSeq = nextSeq;
+    let candidateId = `${prefix}-${candidateSeq}`;
+    let attempts = 0;
+
+    while (attempts < 50) {
+      const existingCard = await getDoc(doc(db, "idCards", candidateId));
+      if (!existingCard.exists()) {
+        break;
       }
-      localStorage.setItem("rm_member_seq", next.toString());
+      candidateSeq++;
+      candidateId = `${prefix}-${candidateSeq}`;
+      attempts++;
     }
-    return `${prefix}-${next}`;
+
+    // Update counter if duplicate resolution advanced the sequence
+    if (candidateSeq !== nextSeq) {
+      try {
+        await setDoc(
+          counterRef,
+          {
+            currentSequence: candidateSeq,
+            lastEmployeeId: candidateId,
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (e) {
+        console.warn("Counter advance sync warning:", e);
+      }
+    }
+
+    if (typeof window !== "undefined") {
+      localStorage.setItem("rm_member_seq", candidateSeq.toString());
+    }
+
+    return candidateId;
+  } catch (err) {
+    console.warn("Database sequential ID fallback:", err);
+    const fallbackBase = await getLastGeneratedSequenceFromDatabase(prefix).catch(() => 1110);
+    const fallbackSeq = fallbackBase + 1;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("rm_member_seq", fallbackSeq.toString());
+    }
+    return `${prefix}-${fallbackSeq}`;
   }
 }
 
+/**
+ * Previews the next sequential employee ID without consuming/incrementing the counter.
+ * Inspects existing database records to predict the next ID to be assigned.
+ */
 export async function peekNextEmployeeId(tier: "green" | "blue" | "orange" | "red" | string): Promise<string> {
-  const prefix = tier === "orange" || tier === "red" ? "RM-A" : tier === "blue" ? "RM-B" : "RM-C";
-  const counterRef = doc(db, "counters", "memberSequence");
+  const prefix = getPrefixForTier(tier);
 
   try {
-    const snap = await getDoc(counterRef);
-    let current = 1110;
-    if (snap.exists()) {
-      const data = snap.data();
-      current = typeof data.currentSequence === "number" ? data.currentSequence : 1110;
-    }
-    return `${prefix}-${current + 1}`;
-  } catch {
-    let next = 1111;
-    if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("rm_member_seq");
-      if (stored) {
-        next = parseInt(stored, 10) + 1;
+    const highestInDb = await getLastGeneratedSequenceFromDatabase(prefix);
+    let candidateSeq = highestInDb + 1;
+    let candidateId = `${prefix}-${candidateSeq}`;
+
+    // Verify candidate ID doesn't already exist
+    let attempts = 0;
+    while (attempts < 50) {
+      const snap = await getDoc(doc(db, "idCards", candidateId));
+      if (!snap.exists()) {
+        break;
       }
+      candidateSeq++;
+      candidateId = `${prefix}-${candidateSeq}`;
+      attempts++;
     }
-    return `${prefix}-${next}`;
+
+    return candidateId;
+  } catch (err) {
+    console.warn("peekNextEmployeeId fallback:", err);
+    return `${prefix}-1111`;
   }
 }

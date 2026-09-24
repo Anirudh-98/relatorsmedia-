@@ -38,9 +38,25 @@ export interface RegisterMemberParams {
  * and save their complete profile and ID card record in Firestore.
  */
 export async function registerMember(params: RegisterMemberParams): Promise<{ user: User; profile: MemberProfileData }> {
-  // 1. Create Firebase Auth user
-  const userCredential = await createUserWithEmailAndPassword(auth, params.email, params.password);
-  const user = userCredential.user;
+  // 1. Create Firebase Auth user or sign in if already exists
+  let user: User;
+  try {
+    const userCredential = await createUserWithEmailAndPassword(auth, params.email, params.password);
+    user = userCredential.user;
+  } catch (authErr: any) {
+    if (authErr?.code === "auth/email-already-in-use") {
+      try {
+        const signInCredential = await signInWithEmailAndPassword(auth, params.email, params.password);
+        user = signInCredential.user;
+      } catch (signInErr: any) {
+        throw new Error(
+          "An account with this email already exists. Please enter your existing password to update your ID card, or sign in first."
+        );
+      }
+    } else {
+      throw authErr;
+    }
+  }
 
   // 2. Generate Member Employee ID sequentially starting from 1111
   const generatedEmpId = params.employeeId || (await getNextEmployeeId(params.selectedTier));
@@ -59,10 +75,21 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
   }
 
   // 4. Update Firebase Auth Profile
-  await updateProfile(user, {
-    displayName: params.fullName,
-    photoURL: photoUrl,
-  });
+  // Firebase Auth photoURL has a strict limit (under 2048 chars, HTTP/HTTPS only).
+  // Base64 data URLs trigger 'auth/invalid-profile-attribute (Photo URL too long)'.
+  const safeAuthPhotoUrl =
+    photoUrl && !photoUrl.startsWith("data:") && photoUrl.length < 2048
+      ? photoUrl
+      : undefined;
+
+  try {
+    await updateProfile(user, {
+      displayName: params.fullName,
+      ...(safeAuthPhotoUrl ? { photoURL: safeAuthPhotoUrl } : {}),
+    });
+  } catch (profileErr) {
+    console.warn("Auth updateProfile warning:", profileErr);
+  }
 
   // 5. Construct full member profile
   const department =

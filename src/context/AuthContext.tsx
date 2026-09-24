@@ -26,9 +26,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [memberProfile, setMemberProfile] = useState<MemberProfileData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProfile = async (uid: string) => {
+  const fetchProfile = async (uid: string, email?: string | null) => {
     try {
-      const profile = await getMemberProfile(uid);
+      const profile = await getMemberProfile(uid, email);
       setMemberProfile(profile);
     } catch (err) {
       console.warn("Error fetching member profile:", err);
@@ -39,7 +39,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = subscribeToAuthState(async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        await fetchProfile(currentUser.uid);
+        await fetchProfile(currentUser.uid, currentUser.email);
       } else {
         setMemberProfile(null);
       }
@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const refreshProfile = async () => {
     if (user) {
-      await fetchProfile(user.uid);
+      await fetchProfile(user.uid, user.email);
     }
   };
 
