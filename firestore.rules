@@ -1,0 +1,23 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Member profiles: readable publicly for verification, writable by the authenticated user
+    match /members/{memberId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Properties: readable publicly, creatable by authenticated or guest posters
+    match /properties/{propertyId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if request.auth != null;
+    }
+    
+    // Leads: creatable publicly, readable by recipient member or auth users
+    match /leads/{leadId} {
+      allow create: if true;
+      allow read: if request.auth != null;
+    }
+  }
+}

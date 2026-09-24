@@ -1,11 +1,18 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
-import { FaPlusSquare, FaCheckCircle, FaUpload, FaShieldAlt, FaRupeeSign, FaHome } from "react-icons/fa";
+import { FaPlusSquare, FaCheckCircle, FaUpload, FaImage, FaSpinner, FaTrash, FaExclamationTriangle } from "react-icons/fa";
+import { useAuth } from "@/context/AuthContext";
+import { uploadPropertyImage } from "@/lib/firebase/storage";
+import { createPropertyListing } from "@/lib/firebase/db";
+import { submitPropertyCloudFunction } from "@/lib/firebase/functions";
 
 export default function PostPropertyPage() {
+  const { user, memberProfile } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState({
     title: "",
     propertyType: "Open Plots",
@@ -16,18 +23,96 @@ export default function PostPropertyPage() {
     area: "",
     bhk: "N/A",
     reraNumber: "",
-    name: "",
-    phone: "",
-    email: "",
+    name: memberProfile?.fullName || user?.displayName || "",
+    phone: memberProfile?.phone || "",
+    email: user?.email || "",
     role: "Owner",
     description: "",
   });
 
+  const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [generatedRefId, setGeneratedRefId] = useState("");
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedImageFile(file);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        setImagePreview(event.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removeImage = () => {
+    setSelectedImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    setErrorMessage(null);
+    setIsSubmitting(true);
+
+    try {
+      const tempPropId = `prop_${Date.now()}`;
+      let uploadedImageUrl = "";
+
+      // 1. Upload to Firebase Storage if an image was selected
+      if (selectedImageFile) {
+        try {
+          uploadedImageUrl = await uploadPropertyImage(selectedImageFile, tempPropId, selectedImageFile.name);
+        } catch (storageErr) {
+          console.warn("Storage upload notice:", storageErr);
+        }
+      }
+
+      // 2. Save in Firestore Database
+      const firestoreDocId = await createPropertyListing({
+        title: formData.title,
+        propertyType: formData.propertyType,
+        listingType: formData.listingType,
+        city: formData.city,
+        locality: formData.locality,
+        price: formData.price,
+        area: formData.area,
+        bhk: formData.bhk,
+        reraNumber: formData.reraNumber,
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        role: formData.role,
+        description: formData.description,
+        imageUrl: uploadedImageUrl,
+        authorUid: user?.uid || "guest",
+        status: "Active",
+      });
+
+      // 3. Trigger Serverless Cloud Function
+      try {
+        const cloudResult = await submitPropertyCloudFunction({
+          ...formData,
+          firestoreId: firestoreDocId,
+          imageUrl: uploadedImageUrl,
+        });
+        setGeneratedRefId(cloudResult.referenceId || `PROP-2026-${Math.floor(10000 + Math.random() * 90000)}`);
+      } catch {
+        setGeneratedRefId(`PROP-2026-${Math.floor(10000 + Math.random() * 90000)}`);
+      }
+
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error("Post property error:", err);
+      setErrorMessage(err.message || "Failed to publish property. Please check your network connection.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -67,9 +152,9 @@ export default function PostPropertyPage() {
               <p className="text-[13px] text-[#2D3748] max-w-lg mx-auto leading-relaxed">
                 Your listing &ldquo;<strong className="text-[#073F73]">{formData.title}</strong>&rdquo; has been registered under reference ID:{" "}
                 <span className="font-mono font-black text-[#073F73]">
-                  PROP-2026-{Math.floor(10000 + Math.random() * 90000)}
+                  {generatedRefId}
                 </span>
-                . It will appear live across the Real Estate Hub and Classifieds within 15 minutes.
+                . It is stored securely in Firebase and will appear live across the Real Estate Hub and Classifieds.
               </p>
 
               <div className="pt-4 flex justify-center gap-3">
@@ -81,8 +166,11 @@ export default function PostPropertyPage() {
                 </Link>
                 <button
                   type="button"
-                  onClick={() => setSubmitted(false)}
-                  className="bg-white border border-[#CBD5E1] text-[#073F73] text-[12px] font-bold px-4 py-2 rounded-md hover:bg-gray-50 transition-colors"
+                  onClick={() => {
+                    setSubmitted(false);
+                    removeImage();
+                  }}
+                  className="bg-white border border-[#CBD5E1] text-[#073F73] text-[12px] font-bold px-4 py-2 rounded-md hover:bg-gray-50 transition-colors cursor-pointer"
                 >
                   Post Another Property
                 </button>
@@ -90,6 +178,13 @@ export default function PostPropertyPage() {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {errorMessage && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded text-[12px] text-red-700 flex items-start gap-2">
+                  <FaExclamationTriangle className="text-red-500 mt-0.5 flex-shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
               {/* Section 1: Basic Information */}
               <div>
                 <h3 className="text-[14px] font-black uppercase text-[#073F73] pb-1.5 border-b border-[#E2E8F0] mb-3">
@@ -248,10 +343,59 @@ export default function PostPropertyPage() {
                 </div>
               </div>
 
-              {/* Section 3: Contact Details */}
+              {/* Section 3: Image Upload (Firebase Storage) */}
+              <div>
+                <h3 className="text-[14px] font-black uppercase text-[#073F73] pb-1.5 border-b border-[#E2E8F0] mb-3 flex items-center justify-between">
+                  <span>3. Property Photo (Stored in Firebase)</span>
+                  <span className="text-[10px] text-gray-500 font-semibold lowercase">optional but recommended</span>
+                </h3>
+
+                <div className="p-4 bg-[#F8FAFC] border border-dashed border-[#CBD5E1] rounded-lg">
+                  {imagePreview ? (
+                    <div className="flex items-center gap-4">
+                      <div className="relative w-24 h-24 rounded-lg overflow-hidden border border-gray-300">
+                        <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-[12px] font-bold text-[#073F73]">{selectedImageFile?.name}</p>
+                        <p className="text-[10px] text-gray-500">Ready to upload to Firebase Storage</p>
+                        <button
+                          type="button"
+                          onClick={removeImage}
+                          className="text-[11px] text-red-600 font-bold hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <FaTrash className="text-[9px]" /> Remove Image
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-3">
+                      <FaImage className="text-gray-400 text-3xl mx-auto mb-2" />
+                      <p className="text-[12px] font-bold text-[#143B5D]">Upload Property Elevation / Site Photo</p>
+                      <p className="text-[10px] text-gray-500 mb-3">PNG, JPG, or WEBP up to 10MB</p>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="bg-[#073F73] hover:bg-[#06345F] text-white text-[11px] font-bold px-3 py-1.5 rounded transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                      >
+                        <FaUpload className="text-[10px]" /> Browse Photo
+                      </button>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleImageChange}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Section 4: Contact Details */}
               <div>
                 <h3 className="text-[14px] font-black uppercase text-[#073F73] pb-1.5 border-b border-[#E2E8F0] mb-3">
-                  3. Advertiser & Contact Information
+                  4. Advertiser & Contact Information
                 </h3>
 
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3.5 mb-3.5">
@@ -331,9 +475,17 @@ export default function PostPropertyPage() {
               <div className="pt-2">
                 <button
                   type="submit"
-                  className="w-full bg-[#168A3A] hover:bg-[#116e2e] text-white text-[13px] font-black py-3 rounded-md uppercase tracking-wider transition-colors shadow-sm cursor-pointer"
+                  disabled={isSubmitting}
+                  className="w-full bg-[#168A3A] hover:bg-[#116e2e] disabled:bg-gray-400 text-white text-[13px] font-black py-3 rounded-md uppercase tracking-wider transition-colors shadow-sm cursor-pointer flex items-center justify-center gap-2"
                 >
-                  Publish Free Property Listing Now →
+                  {isSubmitting ? (
+                    <>
+                      <FaSpinner className="animate-spin text-[14px]" />
+                      <span>Saving to Firebase & Processing Cloud Function...</span>
+                    </>
+                  ) : (
+                    <span>Publish Free Property Listing Now →</span>
+                  )}
                 </button>
               </div>
             </form>

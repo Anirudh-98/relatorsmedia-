@@ -6,6 +6,7 @@ import { PortalLayout } from "@/components/layout/PortalLayout";
 import { RealtorsMediaIdCard } from "@/components/ui/RealtorsMediaIdCard";
 import { realtorsEmployees } from "@/data/portalData";
 import { RealtorsMediaEmployee } from "@/types";
+import { useAuth } from "@/context/AuthContext";
 import {
   FaIdCard,
   FaHome,
@@ -19,11 +20,45 @@ import {
   FaEnvelope,
   FaPrint,
   FaShareAlt,
+  FaSignOutAlt,
 } from "react-icons/fa";
 
 export default function DashboardPage() {
+  const { user, memberProfile, logout } = useAuth();
   const [activeTab, setActiveTab] = useState<"card" | "listings" | "leads" | "earnings">("card");
-  const [currentEmployee, setCurrentEmployee] = useState<RealtorsMediaEmployee>(realtorsEmployees[1]); // Rohan Deshmukh
+
+  // If member is logged in via Firebase Auth / Firestore, construct their live profile card
+  const currentEmployee: RealtorsMediaEmployee = memberProfile
+    ? {
+        name: memberProfile.fullName,
+        designation: memberProfile.designation,
+        employeeId: memberProfile.employeeId,
+        department: memberProfile.department,
+        location: `${memberProfile.city}, ${memberProfile.state}`,
+        issuedDate: memberProfile.issuedDate || "24 SEP 2026",
+        validTill: memberProfile.validTill || "23 SEP 2028",
+        photo: memberProfile.photoUrl || user?.photoURL || "/images/rohan_deshmukh.png",
+        verificationUrl: memberProfile.verificationUrl || `https://realtorsmedia.com/verify/${memberProfile.employeeId}`,
+        theme: memberProfile.selectedTier === "orange" ? "red" : memberProfile.selectedTier,
+        phone: memberProfile.phone ? `+91 ${memberProfile.phone}` : "+91 9876543210",
+        email: memberProfile.email || user?.email || "member@realtorsmedia.com",
+      }
+    : user
+    ? {
+        name: user.displayName || user.email?.split("@")[0] || "Registered Member",
+        designation: "VERIFIED REALTOR",
+        employeeId: "RM-B-2026",
+        department: "Property Brokerage Cell",
+        location: "India",
+        issuedDate: "24 SEP 2026",
+        validTill: "23 SEP 2028",
+        photo: user.photoURL || "/images/rohan_deshmukh.png",
+        verificationUrl: "https://realtorsmedia.com/verify/RM-B-2026",
+        theme: "blue",
+        phone: "+91 9876543210",
+        email: user.email || "member@realtorsmedia.com",
+      }
+    : realtorsEmployees[1]; // Fallback demo member (Rohan Deshmukh)
 
   // Simulated listings
   const myListings = [
@@ -94,16 +129,28 @@ export default function DashboardPage() {
     <PortalLayout
       title="MEMBER PORTAL DASHBOARD"
       subtitle="Manage your Realtors Media verified credentials, active property listings, client inquiries, and transaction commissions"
-      badge="EXECUTIVE MEMBER"
+      badge={memberProfile ? `${memberProfile.selectedTier.toUpperCase()} MEMBER` : "EXECUTIVE MEMBER"}
       breadcrumbs={[{ label: "Dashboard" }]}
       action={
-        <Link
-          href="/post-property"
-          className="bg-[#E21F2F] hover:bg-[#c91826] text-white text-[11px] font-black uppercase px-3 py-1.5 rounded-[3px] transition-colors flex items-center gap-1.5"
-        >
-          <FaPlus className="text-[10px]" />
-          <span>Post Property</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/post-property"
+            className="bg-[#E21F2F] hover:bg-[#c91826] text-white text-[11px] font-black uppercase px-3 py-1.5 rounded-[3px] transition-colors flex items-center gap-1.5"
+          >
+            <FaPlus className="text-[10px]" />
+            <span>Post Property</span>
+          </Link>
+          {user && (
+            <button
+              onClick={() => logout()}
+              className="bg-gray-100 hover:bg-gray-200 text-[#143B5D] text-[11px] font-bold px-2.5 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1 cursor-pointer"
+              title="Sign Out of Firebase"
+            >
+              <FaSignOutAlt className="text-[10px]" />
+              <span>Logout</span>
+            </button>
+          )}
+        </div>
       }
     >
       <div className="space-y-6">
@@ -123,7 +170,7 @@ export default function DashboardPage() {
                   {currentEmployee.name}
                 </h2>
                 <span className="bg-[#EEF6FC] text-[#0B4F8A] border border-[#A5CEE8] text-[9.5px] font-black px-2 py-0.5 rounded-full uppercase">
-                  Verified Executive
+                  {memberProfile?.selectedTier ? `${memberProfile.selectedTier} Tier` : "Verified Executive"}
                 </span>
               </div>
               <p className="text-[11.5px] text-gray-600 font-semibold">
@@ -145,7 +192,7 @@ export default function DashboardPage() {
             </Link>
             <button
               onClick={() => window.print()}
-              className="bg-gray-100 hover:bg-gray-200 text-[#143B5D] text-[11px] font-bold px-3 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1.5"
+              className="bg-gray-100 hover:bg-gray-200 text-[#143B5D] text-[11px] font-bold px-3 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer"
             >
               <FaPrint className="text-[10px]" />
               <span>Print ID</span>

@@ -24,6 +24,8 @@ import {
   FaCheck,
 } from "react-icons/fa";
 
+import { registerMember } from "@/lib/firebase/auth";
+
 export default function RegisterPage() {
   const router = useRouter();
 
@@ -58,6 +60,12 @@ export default function RegisterPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Submission state
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [registeredSuccess, setRegisteredSuccess] = useState(false);
+  const [generatedEmpId, setGeneratedEmpId] = useState("");
 
   // Attach stream when camera is active
   useEffect(() => {
@@ -172,10 +180,6 @@ export default function RegisterPage() {
     }
   };
 
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [registeredSuccess, setRegisteredSuccess] = useState(false);
-  const [generatedEmpId, setGeneratedEmpId] = useState("");
-
   // Construct preview employee object
   const previewEmployee: RealtorsMediaEmployee = {
     name: formData.fullName || "Your Full Name",
@@ -213,21 +217,57 @@ export default function RegisterPage() {
     email: formData.email,
   };
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrorMessage(null);
+
+    if (formData.password !== formData.confirmPassword) {
+      setErrorMessage("Passwords do not match. Please re-enter your password.");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters long.");
+      return;
+    }
+
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      setIsSubmitting(false);
-      const newId =
-        selectedTier === "orange"
-          ? `RM-A-${Math.floor(1000 + Math.random() * 9000)}`
-          : selectedTier === "blue"
-          ? `RM-B-${Math.floor(1000 + Math.random() * 9000)}`
-          : `RM-C-${Math.floor(1000 + Math.random() * 9000)}`;
-      setGeneratedEmpId(newId);
+    try {
+      const { profile } = await registerMember({
+        email: formData.email,
+        password: formData.password,
+        fullName: formData.fullName,
+        phone: formData.phone,
+        city: formData.city,
+        state: formData.state,
+        reraNo: formData.reraNo,
+        experienceYears: formData.experienceYears,
+        specialization: formData.specialization,
+        companyName: formData.companyName,
+        memberType,
+        selectedTier,
+        photoDataUrlOrFile: formData.photo,
+      });
+
+      setGeneratedEmpId(profile.employeeId);
       setRegisteredSuccess(true);
-    }, 1200);
+    } catch (err: any) {
+      console.error("Registration error:", err);
+      let msg = "Registration failed. Please verify your details.";
+      if (err.code === "auth/email-already-in-use") {
+        msg = "This email address is already registered. Please log in instead.";
+      } else if (err.code === "auth/invalid-email") {
+        msg = "The email address entered is invalid.";
+      } else if (err.code === "auth/weak-password") {
+        msg = "The password is too weak. Please use at least 6 characters.";
+      } else if (err.message) {
+        msg = err.message;
+      }
+      setErrorMessage(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -390,6 +430,13 @@ export default function RegisterPage() {
 
             {/* Step 3: Registration Form */}
             <form onSubmit={handleRegister} className="space-y-3.5 text-[12px]">
+              {errorMessage && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-[4px] text-[11.5px] text-red-700 flex items-start gap-2">
+                  <FaExclamationTriangle className="text-red-500 mt-0.5 flex-shrink-0" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
               <label className="block text-[11.5px] font-black uppercase tracking-wider text-[#073F73] mb-1">
                 3. Member Details & Credentials
               </label>
