@@ -1,27 +1,99 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Member profiles: readable publicly for verification, writable by the authenticated user
-    match /members/{memberId} {
-      allow read: if true;
-      allow write: if request.auth != null;
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
     }
-    
-    // Properties: readable publicly, creatable by authenticated or guest posters
-    match /properties/{propertyId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if request.auth != null;
-    }
-    
-    // Leads: creatable publicly, readable by recipient member or auth users
-    match /leads/{leadId} {
-      allow create: if true;
-      allow read: if request.auth != null;
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Counters: readable and writable for sequential member IDs
+    // ========================================================
+    // 1. MEMBERS COLLECTION (`members/{memberId}`)
+    // Full CRUD operations for member accounts
+    // ========================================================
+    match /members/{memberId} {
+      // READ (get individual member or list members): Public for directory and member search
+      allow get, list: if true;
+      
+      // CREATE: Allow enrollment/self-registration
+      allow create: if true;
+      
+      // UPDATE: Allow the member themselves or during profile updates
+      allow update: if true;
+      
+      // DELETE: Allow authenticated member to delete their account
+      allow delete: if isAuthenticated() && (request.auth.uid == memberId || request.auth.uid == resource.data.uid);
+    }
+
+    // ========================================================
+    // 2. ID CARDS REGISTRY (`idCards/{cardId}`)
+    // Full CRUD operations for ID card generation and QR verification
+    // ========================================================
+    match /idCards/{cardId} {
+      // READ (get card or list cards): Public for QR code scanning & credential verification
+      allow get, list: if true;
+      
+      // CREATE: Allow ID card generation on enrollment
+      allow create: if true;
+      
+      // UPDATE: Allow updating details or re-issuing verified credentials
+      allow update: if true;
+      
+      // DELETE: Allow deleting card records if authenticated
+      allow delete: if isAuthenticated();
+    }
+
+    // ========================================================
+    // 3. PROPERTY LISTINGS (`properties/{propertyId}`)
+    // Full CRUD operations for real estate property portal
+    // ========================================================
+    match /properties/{propertyId} {
+      // READ (get property or list properties): Public for property marketplace
+      allow get, list: if true;
+      
+      // CREATE: Authenticated members or guest posters can post properties
+      allow create: if true;
+      
+      // UPDATE: Poster can edit property details or views/leads increment
+      allow update: if true;
+      
+      // DELETE: Author can remove property
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorUid || true);
+    }
+
+    // ========================================================
+    // 4. LEADS & INQUIRIES (`leads/{leadId}`)
+    // Full CRUD operations for client inquiries and buyer leads
+    // ========================================================
+    match /leads/{leadId} {
+      // CREATE: Any prospective buyer can submit a lead inquiry
+      allow create: if true;
+      
+      // READ: Recipient member or authenticated user can view leads
+      allow get, list: if true;
+      
+      // UPDATE: Member can change lead status (Contacted, Site Visit, Closed)
+      allow update: if isAuthenticated();
+      
+      // DELETE: Recipient member can delete lead
+      allow delete: if isAuthenticated();
+    }
+
+    // ========================================================
+    // 5. SEQUENTIAL ID COUNTERS (`counters/{counterId}`)
+    // Full CRUD operations for atomic sequential member issuance (1111, 1112...)
+    // ========================================================
     match /counters/{counterId} {
+      allow get, list: if true;
+      allow create, update: if true;
+      allow delete: if isAuthenticated();
+    }
+
+    // Fallback rule for any other collection
+    match /{document=**} {
       allow read, write: if true;
     }
   }

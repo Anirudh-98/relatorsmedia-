@@ -30,7 +30,7 @@ export default function DashboardPage() {
 
   React.useEffect(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem("rm_last_member");
+      const stored = localStorage.getItem("rm_last_member") || localStorage.getItem("rm_member_profile");
       if (stored) {
         try {
           setLocalMember(JSON.parse(stored));
@@ -39,53 +39,45 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // If member is logged in via Firebase Auth / Firestore, construct their live profile card
-  const currentEmployee: RealtorsMediaEmployee = memberProfile
+  // Merge live member profile from Firestore & local storage to render exact entered details
+  const activeProfile = {
+    ...localMember,
+    ...memberProfile,
+    photo: memberProfile?.photoUrl || memberProfile?.photo || localMember?.photo || localMember?.photoUrl || user?.photoURL,
+    employeeId: memberProfile?.employeeId || localMember?.employeeId,
+    phone: memberProfile?.phone || memberProfile?.mobile || localMember?.phone || localMember?.mobile,
+    email: memberProfile?.email || localMember?.email || user?.email,
+    name: memberProfile?.fullName || memberProfile?.name || localMember?.name || localMember?.fullName || user?.displayName,
+    location: memberProfile?.location || (memberProfile?.city && memberProfile?.state ? `${memberProfile.city}, ${memberProfile.state}` : memberProfile?.city) || localMember?.location,
+    agencyName: memberProfile?.agencyName || memberProfile?.companyName || localMember?.agencyName || localMember?.companyName,
+    licenseNumber: memberProfile?.licenseNumber || memberProfile?.reraNo || localMember?.licenseNumber || localMember?.reraNo,
+    experience: memberProfile?.experience || memberProfile?.experienceYears || localMember?.experience,
+    specialization: memberProfile?.specialization || localMember?.specialization,
+    tier: memberProfile?.selectedTier || localMember?.tier || localMember?.selectedTier || "blue",
+  };
+
+  const hasCustomMember = !!(activeProfile.name || activeProfile.employeeId || activeProfile.email);
+
+  const currentEmployee: RealtorsMediaEmployee = hasCustomMember
     ? {
-        name: memberProfile.fullName,
-        designation: memberProfile.designation,
-        employeeId: memberProfile.employeeId,
-        department: memberProfile.department,
-        location: `${memberProfile.city}, ${memberProfile.state}`,
-        issuedDate: memberProfile.issuedDate || "24 SEP 2026",
-        validTill: memberProfile.validTill || "23 SEP 2028",
-        photo: memberProfile.photoUrl || user?.photoURL || "/images/rohan_deshmukh.png",
-        verificationUrl: memberProfile.verificationUrl || `https://realtorsmedia.com/verify/${memberProfile.employeeId}`,
-        theme: memberProfile.selectedTier === "orange" ? "red" : memberProfile.selectedTier,
-        phone: memberProfile.phone ? `+91 ${memberProfile.phone}` : "+91 9876543210",
-        email: memberProfile.email || user?.email || "member@realtorsmedia.com",
+        name: activeProfile.name || (user?.displayName || "Verified Member"),
+        designation: activeProfile.designation || (activeProfile.agencyName ? `${activeProfile.agencyName} - REALTOR` : "VERIFIED REALTOR"),
+        employeeId: activeProfile.employeeId || "RM-C-1111",
+        department: activeProfile.department || "Property Sales & Channel",
+        location: activeProfile.location || "Hyderabad, Telangana",
+        issuedDate: activeProfile.issuedDate || "24 SEP 2026",
+        validTill: activeProfile.validTill || "23 SEP 2028",
+        photo: activeProfile.photo || "/images/realtor_ramnath.jpg",
+        verificationUrl: activeProfile.verificationUrl || `https://realtorsmedia.com/verify/${activeProfile.employeeId || "RM-C-1111"}`,
+        theme: (activeProfile.tier === "orange" || activeProfile.tier === "red" ? "orange" : activeProfile.tier === "green" ? "green" : "blue") as any,
+        phone: activeProfile.phone || "+91 98490 12345",
+        email: activeProfile.email || user?.email || "member@realtorsmedia.com",
+        agencyName: activeProfile.agencyName || "",
+        licenseNumber: activeProfile.licenseNumber || "",
+        experience: activeProfile.experience || "",
+        specialization: activeProfile.specialization || "Residential Properties",
       }
-    : localMember
-    ? {
-        name: localMember.name,
-        designation: localMember.designation || "VERIFIED REALTOR",
-        employeeId: localMember.employeeId,
-        department: localMember.department || "Property Sales & Channel",
-        location: localMember.location || "India",
-        issuedDate: "24 SEP 2026",
-        validTill: "23 SEP 2028",
-        photo: localMember.photo || "/images/rohan_deshmukh.png",
-        verificationUrl: `https://realtorsmedia.com/verify/${localMember.employeeId}`,
-        theme: localMember.tier || "blue",
-        phone: localMember.phone || "+91 9876543210",
-        email: localMember.email || user?.email || "member@realtorsmedia.com",
-      }
-    : user
-    ? {
-        name: user.displayName || user.email?.split("@")[0] || "Registered Member",
-        designation: "VERIFIED REALTOR",
-        employeeId: "RM-B-1111",
-        department: "Property Brokerage Cell",
-        location: "India",
-        issuedDate: "24 SEP 2026",
-        validTill: "23 SEP 2028",
-        photo: user.photoURL || "/images/rohan_deshmukh.png",
-        verificationUrl: "https://realtorsmedia.com/verify/RM-B-1111",
-        theme: "blue",
-        phone: "+91 9876543210",
-        email: user.email || "member@realtorsmedia.com",
-      }
-    : realtorsEmployees[1]; // Fallback demo member (Rohan Deshmukh)
+    : realtorsEmployees[1];
 
   // Simulated listings
   const myListings = [
@@ -202,9 +194,10 @@ export default function DashboardPage() {
               </div>
               <p className="text-[11.5px] text-gray-600 font-semibold">
                 ID: <span className="text-[#073F73] font-bold">{currentEmployee.employeeId}</span> • {currentEmployee.department}
+                {currentEmployee.agencyName && <span> • <strong>{currentEmployee.agencyName}</strong></span>}
               </p>
               <p className="text-[11px] text-gray-500">
-                📍 {currentEmployee.location} • Valid till: {currentEmployee.validTill}
+                📍 {currentEmployee.location} • 📞 {currentEmployee.phone} • ✉ {currentEmployee.email}
               </p>
             </div>
           </div>
@@ -337,6 +330,36 @@ export default function DashboardPage() {
                       <span className="text-gray-500">Department / Wing:</span>
                       <strong className="text-gray-800">{currentEmployee.department}</strong>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Official Mobile:</span>
+                      <strong className="text-gray-800">{currentEmployee.phone}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Registered Email:</span>
+                      <strong className="text-gray-800">{currentEmployee.email}</strong>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Operating Area:</span>
+                      <strong className="text-gray-800">{currentEmployee.location}</strong>
+                    </div>
+                    {currentEmployee.agencyName && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Agency / Brokerage:</span>
+                        <strong className="text-gray-800">{currentEmployee.agencyName}</strong>
+                      </div>
+                    )}
+                    {currentEmployee.specialization && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Specialization:</span>
+                        <strong className="text-gray-800">{currentEmployee.specialization}</strong>
+                      </div>
+                    )}
+                    {currentEmployee.licenseNumber && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">License / RERA:</span>
+                        <strong className="text-gray-800">{currentEmployee.licenseNumber}</strong>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-gray-500">Issuance Date:</span>
                       <strong className="text-gray-800">{currentEmployee.issuedDate}</strong>

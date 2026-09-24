@@ -9,7 +9,7 @@ import {
   NextOrObserver,
 } from "firebase/auth";
 import { auth } from "./config";
-import { saveMemberProfile, getMemberProfile, MemberProfileData, getNextEmployeeId } from "./db";
+import { saveMemberProfile, getMemberProfile, MemberProfileData, getNextEmployeeId, saveIdCardRecord } from "./db";
 import { uploadMemberPhoto } from "./storage";
 
 export interface RegisterMemberParams {
@@ -19,6 +19,10 @@ export interface RegisterMemberParams {
   phone: string;
   city: string;
   state: string;
+  location?: string;
+  agencyName?: string;
+  licenseNumber?: string;
+  experience?: string;
   reraNo?: string;
   experienceYears?: string;
   specialization?: string;
@@ -31,7 +35,7 @@ export interface RegisterMemberParams {
 
 /**
  * Register a new member in Firebase Auth, upload their ID photograph to Firebase Storage,
- * and save their complete profile in Firestore.
+ * and save their complete profile and ID card record in Firestore.
  */
 export async function registerMember(params: RegisterMemberParams): Promise<{ user: User; profile: MemberProfileData }> {
   // 1. Create Firebase Auth user
@@ -42,13 +46,13 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
   const generatedEmpId = params.employeeId || (await getNextEmployeeId(params.selectedTier));
 
   // 3. Upload photo to Firebase Storage if provided
-  let photoUrl = "/images/rohan_deshmukh.png";
+  let photoUrl = "/images/realtor_ramnath.jpg";
   if (params.photoDataUrlOrFile) {
     try {
       photoUrl = await uploadMemberPhoto(params.photoDataUrlOrFile, user.uid);
     } catch (err) {
       console.warn("Storage photo upload warning:", err);
-      if (typeof params.photoDataUrlOrFile === "string" && !params.photoDataUrlOrFile.startsWith("data:")) {
+      if (typeof params.photoDataUrlOrFile === "string") {
         photoUrl = params.photoDataUrlOrFile;
       }
     }
@@ -83,20 +87,33 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
   const issuedDate = `${currentDate.getDate()} ${currentDate.toLocaleString("en-US", { month: "short" }).toUpperCase()} ${currentDate.getFullYear()}`;
   const validTill = `${currentDate.getDate()} ${currentDate.toLocaleString("en-US", { month: "short" }).toUpperCase()} ${currentDate.getFullYear() + 2}`;
 
+  const resolvedLocation = params.location || (params.city && params.state ? `${params.city}, ${params.state}` : params.city || "Hyderabad, Telangana");
+  const resolvedAgency = params.agencyName || params.companyName || "";
+  const resolvedLicense = params.licenseNumber || params.reraNo || "N/A";
+  const resolvedExperience = params.experience || params.experienceYears || "1";
+
   const profileData: MemberProfileData = {
     uid: user.uid,
     fullName: params.fullName,
+    name: params.fullName,
     email: params.email,
     phone: params.phone,
+    mobile: params.phone,
     city: params.city,
     state: params.state,
-    reraNo: params.reraNo || "N/A",
-    experienceYears: params.experienceYears || "1",
+    location: resolvedLocation,
+    agencyName: resolvedAgency,
+    companyName: resolvedAgency || `${params.fullName} Realty`,
+    licenseNumber: resolvedLicense,
+    reraNo: resolvedLicense,
+    experience: resolvedExperience,
+    experienceYears: resolvedExperience,
     specialization: params.specialization || "Residential & Commercial",
-    companyName: params.companyName || `${params.fullName} Realty`,
     photoUrl,
+    photo: photoUrl,
     memberType: params.memberType,
     selectedTier: params.selectedTier,
+    tier: params.selectedTier,
     employeeId: generatedEmpId,
     department,
     designation,
@@ -106,8 +123,31 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     validTill,
   };
 
-  // 6. Save in Firestore
+  // 6. Save in Firestore members and idCards collections
   await saveMemberProfile(user.uid, profileData);
+  await saveIdCardRecord({
+    employeeId: generatedEmpId,
+    fullName: params.fullName,
+    name: params.fullName,
+    phone: params.phone,
+    mobile: params.phone,
+    email: params.email,
+    location: resolvedLocation,
+    agencyName: resolvedAgency,
+    licenseNumber: resolvedLicense,
+    experience: resolvedExperience,
+    specialization: params.specialization || "Residential & Commercial",
+    photoUrl,
+    photo: photoUrl,
+    cardTier: params.selectedTier,
+    department,
+    designation,
+    issuedDate,
+    validTill,
+    status: "ACTIVE",
+    verificationUrl: `https://realtorsmedia.com/verify/${generatedEmpId}`,
+    uid: user.uid,
+  });
 
   return { user, profile: profileData };
 }

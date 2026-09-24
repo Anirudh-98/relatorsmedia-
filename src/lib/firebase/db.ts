@@ -19,17 +19,25 @@ import { db } from "./config";
 export interface MemberProfileData {
   uid: string;
   fullName: string;
+  name?: string;
   phone: string;
+  mobile?: string;
   email: string;
   city: string;
   state: string;
+  location?: string;
+  agencyName?: string;
+  companyName?: string;
+  licenseNumber?: string;
   reraNo?: string;
+  experience?: string;
   experienceYears?: string;
   specialization?: string;
-  companyName?: string;
   photoUrl?: string;
+  photo?: string;
   memberType: "realtor" | "builder" | "professional";
   selectedTier: "green" | "blue" | "orange";
+  tier?: string;
   employeeId: string;
   department: string;
   designation: string;
@@ -39,6 +47,32 @@ export interface MemberProfileData {
   validTill: string;
   createdAt?: Timestamp | any;
   updatedAt?: Timestamp | any;
+}
+
+export interface IdCardRecordData {
+  employeeId: string;
+  fullName: string;
+  name?: string;
+  phone: string;
+  mobile?: string;
+  email: string;
+  location: string;
+  agencyName?: string;
+  licenseNumber?: string;
+  experience?: string;
+  specialization?: string;
+  photoUrl: string;
+  photo?: string;
+  cardTier: string;
+  department: string;
+  designation: string;
+  issuedDate: string;
+  validTill: string;
+  status: string;
+  verificationUrl: string;
+  uid?: string;
+  createdAt?: any;
+  updatedAt?: any;
 }
 
 export interface PropertyListingData {
@@ -111,6 +145,32 @@ export async function getMemberByEmployeeId(employeeId: string): Promise<MemberP
   const snap = await getDocs(q);
   if (!snap.empty) {
     return snap.docs[0].data() as MemberProfileData;
+  }
+  return null;
+}
+
+// ----------------------------------------------------
+// ID Cards Registry (Firestore: `idCards/{employeeId}`)
+// ----------------------------------------------------
+
+export async function saveIdCardRecord(cardData: IdCardRecordData): Promise<void> {
+  const cardRef = doc(db, "idCards", cardData.employeeId);
+  await setDoc(
+    cardRef,
+    {
+      ...cardData,
+      updatedAt: serverTimestamp(),
+      createdAt: cardData.createdAt || serverTimestamp(),
+    },
+    { merge: true }
+  );
+}
+
+export async function getIdCardRecord(employeeId: string): Promise<IdCardRecordData | null> {
+  const cardRef = doc(db, "idCards", employeeId);
+  const snap = await getDoc(cardRef);
+  if (snap.exists()) {
+    return snap.data() as IdCardRecordData;
   }
   return null;
 }
