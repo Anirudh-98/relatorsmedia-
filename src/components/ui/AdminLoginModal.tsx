@@ -16,7 +16,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const [email, setEmail] = useState("admin@relatormedia.com");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -49,7 +49,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
       console.error("Admin login error:", err);
       let msg = "Invalid credentials. Please verify your email and password.";
       if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") {
-        msg = "Incorrect password. Please enter the correct password for admin@relatormedia.com.";
+        msg = "Incorrect password. Please try again.";
       } else if (err.code === "auth/user-not-found") {
         msg = "Admin account not found in Firebase. Please check the email address.";
       } else if (err.code === "auth/too-many-requests") {
@@ -102,8 +102,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             <strong className="block font-black uppercase text-[10px] text-[#0369A1] tracking-wider mb-0.5">
               Restricted Console Access
             </strong>
-            Generating and configuring official Realtors Media ID cards requires administrator sign-in. Verify with{" "}
-            <strong className="underline">admin@relatormedia.com</strong>.
+            Generating and configuring official Realtors Media ID cards requires administrator sign-in.
           </div>
 
           {error && (
@@ -123,7 +122,7 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@relatormedia.com"
+                placeholder="Enter admin email"
                 className="w-full px-3 py-2 text-xs font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#073F73] bg-[#FAFBFD]"
               />
             </div>

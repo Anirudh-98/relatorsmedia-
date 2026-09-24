@@ -53,6 +53,7 @@ const EXPERIENCE_OPTIONS = [
 ];
 
 const SPECIALIZATION_OPTIONS = [
+  "All Properties",
   "Residential Properties",
   "Commercial & Retail",
   "Open Plots & Layouts",

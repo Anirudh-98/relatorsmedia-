@@ -308,9 +308,9 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             2. TOP BRANDING / HEADER AREA
            ======================================================== */}
-        <div className="relative z-10 w-full pt-8 px-7 flex items-center justify-between">
-          {/* LEFT: EMBLEM & BRANDING */}
-          <div className="flex items-center gap-4">
+        <div className="relative z-10 w-full pt-8 px-7 flex items-start">
+          {/* LEFT: EMBLEM & BRANDING (full width now) */}
+          <div className="flex items-center gap-4 w-full">
             {/* Realtors Media Official Logo */}
             <div className="relative w-[148px] h-[126px] flex-shrink-0 flex items-center justify-center">
               <div className="relative w-full h-full">
@@ -327,13 +327,13 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
             </div>
 
             {/* Brand Titles */}
-            <div className="flex flex-col justify-center">
+            <div className="flex flex-col justify-center flex-1">
               <div className="flex items-baseline leading-none">
-                <span className="text-white font-extrabold text-[36px] tracking-tight">
+                <span className="text-white font-extrabold text-[42px] tracking-tight">
                   Realtors
                 </span>
                 <span
-                  className="font-black text-[36px] tracking-tight ml-1"
+                  className="font-black text-[42px] tracking-tight ml-1"
                   style={{ color: currentTheme.brandMediaColor }}
                 >
                   Media
@@ -343,7 +343,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
               {/* Sub-label: — DIGITAL — */}
               <div className="flex items-center gap-2.5 mt-2">
                 <div className="h-[1.5px] w-8 bg-white/50" />
-                <span className="text-white/95 text-[13px] font-black uppercase tracking-[0.28em] leading-none">
+                <span className="text-white/95 text-[16px] font-black uppercase tracking-[0.28em] leading-none">
                   DIGITAL
                 </span>
                 <div className="h-[1.5px] w-8 bg-white/50" />
@@ -351,24 +351,20 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
 
               {/* India's Real Estate Media Platform */}
               <span
-                className="text-[15px] font-bold tracking-wide mt-2 leading-none whitespace-nowrap"
+                className="text-[18px] font-bold tracking-wide mt-2 leading-none whitespace-nowrap"
                 style={{ color: currentTheme.platformSubtext }}
               >
                 India&apos;s Real Estate Media Platform
               </span>
-            </div>
-          </div>
 
-          {/* RIGHT: TAGLINE */}
-          <div className={`text-right border-r-[2.5px] ${currentTheme.taglineBorder} pr-3.5`}>
-            <div className="text-[17px] font-bold leading-[1.36]" style={{ color: currentTheme.taglines }}>
-              People
-            </div>
-            <div className="text-[17px] font-bold leading-[1.36]" style={{ color: currentTheme.taglines }}>
-              Properties
-            </div>
-            <div className="text-[17px] font-bold leading-[1.36]" style={{ color: currentTheme.taglines }}>
-              Possibilities
+              {/* People · Properties · Possibilities — single row */}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-[16px] font-bold leading-none whitespace-nowrap" style={{ color: currentTheme.taglines }}>People</span>
+                <span className="text-[14px] font-bold" style={{ color: currentTheme.taglines }}>·</span>
+                <span className="text-[16px] font-bold leading-none whitespace-nowrap" style={{ color: currentTheme.taglines }}>Properties</span>
+                <span className="text-[14px] font-bold" style={{ color: currentTheme.taglines }}>·</span>
+                <span className="text-[16px] font-bold leading-none whitespace-nowrap" style={{ color: currentTheme.taglines }}>Possibilities</span>
+              </div>
             </div>
           </div>
         </div>
@@ -444,21 +440,21 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           {/* Subtle Tier Badge */}
           <div className="mb-1.5 flex items-center">
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10.5px] font-black uppercase tracking-wider border shadow-2xs ${currentTheme.badgeClass}`}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[13px] font-black uppercase tracking-wider border shadow-2xs ${currentTheme.badgeClass}`}
             >
-              <VerifiedCheckBigIcon size={12} />
+              <VerifiedCheckBigIcon size={14} />
               <span>{currentTheme.badgeText}</span>
             </span>
           </div>
 
           {/* Employee Name */}
-          <h1 className="text-[29px] font-black text-[#0B213D] leading-[1.1] tracking-tight">
+          <h1 className="text-[34px] font-black text-[#0B213D] leading-[1.1] tracking-tight">
             {mergedEmployee.name}
           </h1>
 
           {/* Job Title / Designation / Agency */}
           <div
-            className={`text-[13px] font-black uppercase tracking-[0.14em] mt-1.5 mb-4 leading-tight truncate flex items-center gap-1.5 ${currentTheme.designationColor}`}
+            className={`text-[16px] font-black uppercase tracking-[0.14em] mt-1.5 mb-4 leading-tight truncate flex items-center gap-1.5 ${currentTheme.designationColor}`}
           >
             {(
               (mergedEmployee.agencyName || mergedEmployee.designation || "")
@@ -473,52 +469,52 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           </div>
 
           {/* 5. EMPLOYEE INFORMATION GRID */}
-          <div className="space-y-[10px] text-[14.5px] leading-tight">
+          <div className="space-y-[12px] text-[17px] leading-tight">
             {/* EMP ID */}
-            <div className="grid grid-cols-[90px_14px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[13px] uppercase tracking-wide">EMP ID</span>
-              <span className="font-extrabold text-[#64748B] text-[14px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[14.5px] tracking-normal">
+            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">EMP ID</span>
+              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal">
                 {mergedEmployee.employeeId}
               </span>
             </div>
 
             {/* Dept / Specialization */}
-            <div className="grid grid-cols-[90px_14px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[13px] uppercase tracking-wide">
+            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">
                 {mergedEmployee.specialization ? "Specialty" : "Dept"}
               </span>
-              <span className="font-extrabold text-[#64748B] text-[14px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[14.5px] tracking-normal truncate">
+              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal truncate">
                 {mergedEmployee.specialization || mergedEmployee.department}
               </span>
             </div>
 
             {/* Location */}
-            <div className="grid grid-cols-[90px_14px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[13px] uppercase tracking-wide">Location</span>
-              <span className="font-extrabold text-[#64748B] text-[14px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[14.5px] tracking-normal truncate">
+            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">Location</span>
+              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal truncate">
                 {mergedEmployee.location}
               </span>
             </div>
 
             {/* License / RERA or Issued */}
-            <div className="grid grid-cols-[90px_14px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[13px] uppercase tracking-wide">
+            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">
                 {mergedEmployee.licenseNumber || mergedEmployee.reraNumber ? "License" : "Issued"}
               </span>
-              <span className="font-extrabold text-[#64748B] text-[14px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[14.5px] tracking-normal truncate">
+              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal truncate">
                 {mergedEmployee.licenseNumber || mergedEmployee.reraNumber || mergedEmployee.issuedDate}
               </span>
             </div>
 
             {/* Valid Till */}
-            <div className="grid grid-cols-[90px_14px_1fr] items-baseline">
-              <span className="font-bold text-[#475569] text-[13px] uppercase tracking-wide">Valid Till</span>
-              <span className="font-extrabold text-[#64748B] text-[14px]">:</span>
-              <span className="font-extrabold text-[#0F172A] text-[14.5px] tracking-normal">
+            <div className="grid grid-cols-[108px_16px_1fr] items-baseline">
+              <span className="font-bold text-[#475569] text-[15px] uppercase tracking-wide">Valid Till</span>
+              <span className="font-extrabold text-[#64748B] text-[16px]">:</span>
+              <span className="font-extrabold text-[#0F172A] text-[17px] tracking-normal">
                 {mergedEmployee.validTill}
               </span>
             </div>
@@ -530,7 +526,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
            ======================================================== */}
         <div className="absolute left-[44px] top-[835px] z-10 w-[185px]">
           <div className="w-full h-[1.5px] bg-[#94A3B8] mb-1.5" />
-          <div className="text-[12px] font-black uppercase text-[#0F172A] tracking-wider leading-none">
+          <div className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider leading-none">
             Authorized Signature
           </div>
         </div>
@@ -538,8 +534,8 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             7. RIGHT PROMOTIONAL SECTION: BUILDING BETTER COMMUNITIES
            ======================================================== */}
-        <div className="absolute right-[44px] top-[470px] z-10 text-right w-[240px]">
-          <div className={`text-[18px] font-black uppercase leading-[1.18] tracking-tight ${currentTheme.promoTitleColor}`}>
+        <div className="absolute right-[44px] top-[440px] z-10 text-right w-[240px]">
+          <div className={`text-[22px] font-black uppercase leading-[1.18] tracking-tight ${currentTheme.promoTitleColor}`}>
             BUILDING
             <br />
             BETTER
@@ -553,40 +549,40 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           <div className="mt-5 space-y-3 flex flex-col items-end">
             {/* 1. LIST */}
             <div className="flex items-center gap-2.5">
-              <span className="text-[12.5px] font-black uppercase text-[#0F172A] tracking-wider">
+              <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider">
                 LIST
               </span>
-              <div className={`w-7.5 h-7.5 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[13px]`}>
+              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[15px]`}>
                 <FaHome />
               </div>
             </div>
 
             {/* 2. PROMOTE */}
             <div className="flex items-center gap-2.5">
-              <span className="text-[12.5px] font-black uppercase text-[#0F172A] tracking-wider">
+              <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider">
                 PROMOTE
               </span>
-              <div className={`w-7.5 h-7.5 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[13px]`}>
+              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[15px]`}>
                 <FaBullhorn />
               </div>
             </div>
 
             {/* 3. CONNECT */}
             <div className="flex items-center gap-2.5">
-              <span className="text-[12.5px] font-black uppercase text-[#0F172A] tracking-wider">
+              <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider">
                 CONNECT
               </span>
-              <div className={`w-7.5 h-7.5 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[13px]`}>
+              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[15px]`}>
                 <FaUserFriends />
               </div>
             </div>
 
             {/* 4. GROW */}
             <div className="flex items-center gap-2.5">
-              <span className="text-[12.5px] font-black uppercase text-[#0F172A] tracking-wider">
+              <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider">
                 GROW
               </span>
-              <div className={`w-7.5 h-7.5 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[13px]`}>
+              <div className={`w-8 h-8 rounded-full bg-gradient-to-tr ${currentTheme.featureGradient} shadow-xs flex items-center justify-center text-white text-[15px]`}>
                 <FaChartLine />
               </div>
             </div>
@@ -596,7 +592,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             8. QR CODE SECTION (LOWER RIGHT)
            ======================================================== */}
-        <div className="absolute right-[44px] top-[736px] z-10 flex flex-col items-center">
+        <div className="absolute right-[44px] top-[735px] z-10 flex flex-col items-center">
           <div className="w-[114px] h-[114px] bg-white rounded-[14px] p-2 border border-[#94A3B8]/60 shadow-sm flex items-center justify-center">
             <QRCodeSVG
               value={
@@ -614,7 +610,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
               fgColor="#0F172A"
             />
           </div>
-          <span className="text-[12.5px] font-black uppercase text-[#0F172A] tracking-wider mt-2 leading-none">
+          <span className="text-[15px] font-black uppercase text-[#0F172A] tracking-wider mt-2 leading-none">
             Scan to Verify
           </span>
         </div>
@@ -622,27 +618,27 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             9. BOTTOM THEMED FOOTER DETAILS (2 HORIZONTAL LINES)
            ======================================================== */}
-        <div className="absolute left-[38px] right-[38px] top-[944px] z-10 flex flex-col justify-center gap-2 text-white">
+        <div className="absolute left-[38px] right-[38px] top-[940px] z-10 flex flex-col justify-center gap-2.5 text-white">
           {/* Line 1: Location (Left) & Phone (Right) */}
-          <div className="flex items-center justify-between text-[11px] font-bold tracking-wide">
+          <div className="flex items-center justify-between text-[13px] font-bold tracking-wide">
             <div className="flex items-center gap-2 min-w-0">
-              <FaMapMarkerAlt className="text-[#F5BF4B] text-[12.5px] shrink-0" />
+              <FaMapMarkerAlt className="text-[#F5BF4B] text-[14px] shrink-0" />
               <span className="truncate">Archana Arcade IT Complex - South Block, 407</span>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
-              <FaPhoneAlt className="text-[#F5BF4B] text-[10.5px] shrink-0" />
+              <FaPhoneAlt className="text-[#F5BF4B] text-[13px] shrink-0" />
               <span>8096792778, 9441185799</span>
             </div>
           </div>
 
           {/* Line 2: Website (Left) & Email (Right) */}
-          <div className="flex items-center justify-between text-[11px] font-bold tracking-wide">
+          <div className="flex items-center justify-between text-[13px] font-bold tracking-wide">
             <div className="flex items-center gap-2 min-w-0">
-              <FaGlobe className="text-[#F5BF4B] text-[12px] shrink-0" />
+              <FaGlobe className="text-[#F5BF4B] text-[13px] shrink-0" />
               <span>www.realtorsmedia.world</span>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
-              <FaEnvelope className="text-[#F5BF4B] text-[11px] shrink-0" />
+              <FaEnvelope className="text-[#F5BF4B] text-[13px] shrink-0" />
               <span>realtorsmedia.info@gmail.com</span>
             </div>
           </div>
