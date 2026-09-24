@@ -144,7 +144,7 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     employeeId: generatedEmpId,
     department,
     designation,
-    verificationUrl: `https://realtorsmedia.com/verify/${generatedEmpId}`,
+    verificationUrl: `https://www.realtorsmedia.world/verify/${generatedEmpId}`,
     status: "ACTIVE",
     issuedDate,
     validTill,
@@ -172,7 +172,7 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     issuedDate,
     validTill,
     status: "ACTIVE",
-    verificationUrl: `https://realtorsmedia.com/verify/${generatedEmpId}`,
+    verificationUrl: `https://www.realtorsmedia.world/verify/${generatedEmpId}`,
     uid: user.uid,
   });
 

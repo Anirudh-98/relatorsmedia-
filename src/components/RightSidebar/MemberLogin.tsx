@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FaUser, FaLock, FaEye, FaEyeSlash, FaSpinner, FaCheckCircle, FaExclamationCircle } from "react-icons/fa";
 import { loginMember } from "@/lib/firebase/auth";
 import { useAuth } from "@/context/AuthContext";
+import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
 
 type LoginTab = "Member" | "Buyer" | "Seller" | "Investor";
 
@@ -80,7 +81,7 @@ export const MemberLogin: React.FC = () => {
           <div className="flex items-center gap-2.5">
             <div className="w-10 h-10 rounded-full bg-gray-100 border border-[#073F73] overflow-hidden flex-shrink-0">
               <img
-                src={memberProfile?.photoUrl || user.photoURL || "/images/rohan_deshmukh.png"}
+                src={getSafePhotoUrl(memberProfile?.photoUrl || user.photoURL)}
                 alt={user.displayName || "User"}
                 className="w-full h-full object-cover"
               />

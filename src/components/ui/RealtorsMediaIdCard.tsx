@@ -15,6 +15,7 @@ import {
 } from "react-icons/fa";
 import { BarcodeSVG } from "./BarcodeSVG";
 import { RealtorsMediaEmployee } from "@/types";
+import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
 
 export interface RealtorsMediaIdCardProps {
   employee?: RealtorsMediaEmployee;
@@ -40,9 +41,9 @@ const DEFAULT_EMPLOYEE: RealtorsMediaEmployee = {
   theme: "blue",
 };
 
-// Internal reference design canvas size (CR80 portrait: 54mm x 85.6mm -> ratio ~ 1.585)
+// Internal reference design canvas size (CR80 portrait: 54mm x 86mm -> ratio ~ 1.5925)
 const CANVAS_WIDTH = 638;
-const CANVAS_HEIGHT = 1011;
+const CANVAS_HEIGHT = 1016;
 
 const THEME_CONFIGS = {
   blue: {
@@ -264,7 +265,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
             </linearGradient>
 
             {/* Bottom Footer Gradient */}
-            <linearGradient id={`${gradientPrefix}-bottomNavyGrad`} x1="0" y1="920" x2="638" y2="1011" gradientUnits="userSpaceOnUse">
+            <linearGradient id={`${gradientPrefix}-bottomNavyGrad`} x1="0" y1="920" x2="638" y2="1016" gradientUnits="userSpaceOnUse">
               <stop offset="0%" stopColor={currentTheme.bottomGrad.start} />
               <stop offset="60%" stopColor={currentTheme.bottomGrad.mid} />
               <stop offset="100%" stopColor={currentTheme.bottomGrad.end} />
@@ -272,7 +273,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
 
             {/* Equal 36px Corner Radius Clip Path for SVG */}
             <clipPath id={`${gradientPrefix}-cardEqualClip`}>
-              <rect x="0" y="0" width="638" height="1011" rx="36" ry="36" />
+              <rect x="0" y="0" width="638" height="1016" rx="36" ry="36" />
             </clipPath>
           </defs>
 
@@ -298,7 +299,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
 
             {/* BOTTOM PLAIN THEMED FOOTER */}
             <path
-              d="M 0 921 C 225 933 445 899 638 894 L 638 1011 L 0 1011 Z"
+              d="M 0 921 C 225 933 445 899 638 894 L 638 1016 L 0 1016 Z"
               fill={`url(#${gradientPrefix}-bottomNavyGrad)`}
             />
           </g>
@@ -395,20 +396,30 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         <div className="absolute left-[44px] top-[342px] z-10">
           <div className={`w-[185px] h-[198px] rounded-[22px] p-[3.5px] bg-gradient-to-br ${currentTheme.photoRing} shadow-md ${currentTheme.photoShadow}`}>
             <div className="relative w-full h-full rounded-[18px] overflow-hidden bg-white">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={mergedEmployee.photo || (mergedEmployee as any).photoUrl || "/images/rohan_deshmukh.png"}
-                alt={mergedEmployee.name || "Member Photo"}
-                className="w-full h-full object-cover object-center"
-                crossOrigin="anonymous"
-                loading="eager"
-                onError={(e) => {
-                  const target = e.currentTarget;
-                  if (!target.src.includes("rohan_deshmukh.png")) {
-                    target.src = "/images/rohan_deshmukh.png";
-                  }
-                }}
-              />
+              {(() => {
+                const rawPhoto =
+                  mergedEmployee.photo ||
+                  (mergedEmployee as any).photoUrl ||
+                  "/images/rohan_deshmukh.png";
+                const displayPhoto = getSafePhotoUrl(rawPhoto);
+
+                return (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={displayPhoto}
+                    alt={mergedEmployee.name || "Member Photo"}
+                    className="w-full h-full object-cover object-center"
+                    crossOrigin="anonymous"
+                    loading="eager"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      if (!target.src.includes("rohan_deshmukh.png")) {
+                        target.src = "/images/rohan_deshmukh.png";
+                      }
+                    }}
+                  />
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -585,8 +596,13 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           <div className="w-[114px] h-[114px] bg-white rounded-[14px] p-2 border border-[#94A3B8]/60 shadow-sm flex items-center justify-center">
             <QRCodeSVG
               value={
-                mergedEmployee.verificationUrl ||
-                `https://realtorsmedia.com/verify/${mergedEmployee.employeeId}`
+                mergedEmployee.employeeId
+                  ? `https://www.realtorsmedia.world/verify/${mergedEmployee.employeeId}`
+                  : mergedEmployee.verificationUrl
+                  ? mergedEmployee.verificationUrl
+                      .replace("realtorsmedia.com", "www.realtorsmedia.world")
+                      .replace("https://realtorsmedia.world", "https://www.realtorsmedia.world")
+                  : "https://www.realtorsmedia.world"
               }
               size={98}
               level="M"
@@ -602,28 +618,28 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ========================================================
             9. BOTTOM THEMED FOOTER DETAILS (2 HORIZONTAL LINES)
            ======================================================== */}
-        <div className="absolute left-[44px] right-[44px] top-[940px] z-10 flex flex-col justify-center gap-2 text-white">
+        <div className="absolute left-[38px] right-[38px] top-[944px] z-10 flex flex-col justify-center gap-2 text-white">
           {/* Line 1: Location (Left) & Phone (Right) */}
-          <div className="flex items-center justify-between text-[11.5px] font-bold tracking-wide">
+          <div className="flex items-center justify-between text-[11px] font-bold tracking-wide">
             <div className="flex items-center gap-2 min-w-0">
-              <FaMapMarkerAlt className="text-[#F5BF4B] text-[13px] shrink-0" />
-              <span className="truncate">Realtors Media, Pune, Maharashtra, India</span>
+              <FaMapMarkerAlt className="text-[#F5BF4B] text-[12.5px] shrink-0" />
+              <span className="truncate">Archana Arcade IT Complex , South Block, 407</span>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
-              <FaPhoneAlt className="text-[#F5BF4B] text-[11px] shrink-0" />
-              <span>+91 9876543210</span>
+              <FaPhoneAlt className="text-[#F5BF4B] text-[10.5px] shrink-0" />
+              <span>8096792778, 9441185799</span>
             </div>
           </div>
 
           {/* Line 2: Website (Left) & Email (Right) */}
-          <div className="flex items-center justify-between text-[11.5px] font-bold tracking-wide">
+          <div className="flex items-center justify-between text-[11px] font-bold tracking-wide">
             <div className="flex items-center gap-2 min-w-0">
               <FaGlobe className="text-[#F5BF4B] text-[12px] shrink-0" />
               <span>www.realtorsmedia.world</span>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
-              <FaEnvelope className="text-[#F5BF4B] text-[11.5px] shrink-0" />
-              <span>support@realtorsmedia.world</span>
+              <FaEnvelope className="text-[#F5BF4B] text-[11px] shrink-0" />
+              <span>realtorsmedia.info@gmail.com</span>
             </div>
           </div>
         </div>

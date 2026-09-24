@@ -88,7 +88,7 @@ export async function uploadMemberPhoto(
 ): Promise<string> {
   // If already an HTTP/HTTPS URL or local path, return immediately without re-uploading
   if (typeof fileOrDataUrl === "string") {
-    if (!fileOrDataUrl) return "/images/realtor_ramnath.jpg";
+    if (!fileOrDataUrl) return "";
     if (
       fileOrDataUrl.startsWith("http://") ||
       fileOrDataUrl.startsWith("https://") ||

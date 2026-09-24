@@ -20,6 +20,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/verfiy/:id*",
+        destination: "/verify/:id*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

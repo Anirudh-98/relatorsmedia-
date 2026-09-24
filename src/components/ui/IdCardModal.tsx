@@ -33,6 +33,7 @@ import { registerMember } from "@/lib/firebase/auth";
 import { updateProfile } from "firebase/auth";
 import { getNextEmployeeId, peekNextEmployeeId, saveMemberProfile, saveIdCardRecord, MemberProfileData } from "@/lib/firebase/db";
 import { uploadMemberPhoto, compressImage } from "@/lib/firebase/storage";
+import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
 
 export interface IdCardModalProps {
   isOpen: boolean;
@@ -426,11 +427,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           ? memberProfile.employeeId
           : await getNextEmployeeId(selectedTier);
 
-      const origin =
-        typeof window !== "undefined" && window.location.origin
-          ? window.location.origin
-          : "https://realtorsmedia.world";
-      const dynamicVerificationUrl = `${origin}/verify/${nextSequentialId}`;
+      const dynamicVerificationUrl = `https://www.realtorsmedia.world/verify/${nextSequentialId}`;
 
       // Compress and upload photo to Firebase Storage (authorized by deployed rules)
       let finalPhotoUrl = formData.photo;
@@ -674,9 +671,9 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
       const dataUrl = await toPng(cardElement, {
         quality: 1,
-        pixelRatio: 3, // 300 DPI for crisp physical printing (1914 x 3033px)
+        pixelRatio: 3, // 300 DPI for crisp physical printing (1914 x 3048px)
         width: 638,
-        height: 1011,
+        height: 1016,
         style: {
           transform: "none",
           transformOrigin: "top left",
@@ -723,7 +720,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         quality: 1,
         pixelRatio: 3,
         width: 638,
-        height: 1011,
+        height: 1016,
         style: {
           transform: "none",
           transformOrigin: "top left",
@@ -759,14 +756,14 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
             <title>Print ID Card - ${formData.employeeId}</title>
             <style>
               @page {
-                size: portrait;
+                size: 54mm 86mm;
                 margin: 0;
               }
               html, body {
                 margin: 0;
                 padding: 0;
-                width: 100%;
-                height: 100%;
+                width: 54mm;
+                height: 86mm;
                 background: #FFFFFF;
                 display: flex;
                 align-items: center;
@@ -774,23 +771,24 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                 overflow: hidden;
               }
               .print-container {
+                width: 54mm;
+                height: 86mm;
                 display: flex;
                 flex-direction: column;
                 align-items: center;
                 justify-content: center;
                 page-break-inside: avoid;
                 break-inside: avoid;
-                margin: auto;
+                margin: 0;
+                padding: 0;
               }
               img {
-                width: 638px;
-                max-width: 92vw;
-                height: auto;
-                max-height: 96vh;
-                aspect-ratio: 638 / 1011;
+                width: 54mm;
+                height: 86mm;
+                aspect-ratio: 54 / 86;
                 display: block;
-                margin: auto;
-                border-radius: 36px;
+                margin: 0;
+                border-radius: 3.5mm;
                 box-shadow: none;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
@@ -840,7 +838,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     issuedDate: formData.issuedDate,
     validTill: formData.validTill,
     photo: formData.photo,
-    verificationUrl: `https://realtorsmedia.com/verify/${formData.employeeId}`,
+    verificationUrl: `https://www.realtorsmedia.world/verify/${formData.employeeId}`,
     theme: selectedTier,
     phone: formData.mobile,
     email: formData.email,
@@ -1176,15 +1174,26 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                   />
                 </div>
 
+                {/* Direct Photo URL Input */}
+                <div className="pt-0.5">
+                  <input
+                    type="url"
+                    value={formData.photo.startsWith("data:") ? "" : formData.photo}
+                    onChange={(e) => setFormData({ ...formData, photo: e.target.value })}
+                    placeholder="Or paste direct image URL (https://...)"
+                    className="w-full px-2.5 py-1.5 text-[11px] border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-white font-medium text-gray-700"
+                  />
+                </div>
+
                 {/* Photo Preview Thumbnail & Status */}
                 {formData.photo && (
                   <div className="flex items-center gap-3 pt-1 border-t border-[#E2E8F0]">
                     <div className="relative w-12 h-12 rounded-lg overflow-hidden border-2 border-[#0284C7] bg-white shadow-xs flex-shrink-0">
-                      <Image
-                        src={formData.photo}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={getSafePhotoUrl(formData.photo)}
                         alt="Profile preview"
-                        fill
-                        className="object-cover"
+                        className="w-full h-full object-cover"
                       />
                     </div>
                     <div className="flex flex-col">
@@ -1197,26 +1206,10 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5 ml-auto">
-                      {/* Presets */}
-                      {PRESET_PHOTOS.map((preset) => (
-                        <button
-                          key={preset.label}
-                          type="button"
-                          onClick={() => setFormData((prev) => ({ ...prev, photo: preset.path }))}
-                          className={`px-1.5 py-0.5 rounded text-[8.5px] font-bold border transition-colors cursor-pointer ${
-                            formData.photo === preset.path
-                              ? "bg-[#073F73] text-white border-[#073F73]"
-                              : "bg-white text-[#475569] border-[#CBD5E1] hover:bg-gray-100"
-                          }`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-
                       <button
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, photo: "" }))}
-                        className="text-[9.5px] font-bold text-red-600 hover:text-red-700 flex items-center gap-1 cursor-pointer bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200 ml-1"
+                        className="text-[9.5px] font-bold text-red-600 hover:text-red-700 flex items-center gap-1 cursor-pointer bg-red-50 hover:bg-red-100 px-2 py-1 rounded border border-red-200"
                         title="Remove photo"
                       >
                         <FaTrash className="text-[8.5px]" /> Remove
