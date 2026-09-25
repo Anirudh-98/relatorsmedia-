@@ -217,7 +217,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
       : T.badgeText;
 
   const infoRows = [
-    { label: "EMP ID", value: employee.employeeId || "RM-A-1116" },
+    { label: "FL ID", value: employee.employeeId || "RM-A-1116" },
     { label: "SPECIALITY", value: employee.specialization || employee.department || "All Properties" },
     { label: "LOCATION", value: employee.location || "Hyderabad" },
     { label: "VALID TILL", value: employee.validTill || "31 Dec 2028" },
@@ -271,7 +271,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             2. LOGO — sits nestled in the top-left white inlet
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[40px] top-[44px] z-10 w-[108px] h-[112px] flex items-center justify-center">
+        <div className="absolute left-[27px] top-[69px] z-10 w-[108px] h-[112px] flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/images/RMLogo.png"

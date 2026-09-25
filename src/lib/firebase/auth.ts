@@ -99,10 +99,12 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
   //    otherwise generate the next sequential ID (starting from 1111)
   const existingEmpId = existingProfile?.employeeId || "";
   const reuseExistingId =
-    !!existingEmpId && existingEmpId.startsWith(`${getPrefixForTier(params.selectedTier)}-`);
-  const generatedEmpId = reuseExistingId
+    !params.employeeId && !!existingEmpId && existingEmpId.startsWith(`${getPrefixForTier(params.selectedTier)}-`);
+  const generatedEmpId = params.employeeId
+    ? params.employeeId.trim()
+    : reuseExistingId
     ? existingEmpId
-    : params.employeeId || (await getNextEmployeeId(params.selectedTier));
+    : await getNextEmployeeId(params.selectedTier);
 
   // 3. Upload photo to Firebase Storage if provided
   let photoUrl = "";

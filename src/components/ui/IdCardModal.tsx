@@ -264,7 +264,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   useEffect(() => {
     if (isCameraActive && videoRef.current && streamRef.current) {
       videoRef.current.srcObject = streamRef.current;
-      videoRef.current.play().catch(() => {});
+      videoRef.current.play().catch(() => { });
     }
   }, [isCameraActive]);
 
@@ -320,7 +320,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play().catch(() => {});
+        videoRef.current.play().catch(() => { });
       }
 
       if (navigator.mediaDevices.enumerateDevices) {
@@ -497,6 +497,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           photoDataUrlOrFile: formData.photo,
           department,
           designation,
+          employeeId: formData.employeeId ? formData.employeeId.trim() : undefined,
           // An admin/member issuing a card for someone else must stay logged in as themselves
           keepCurrentSession: issuedForSomeoneElse,
         });
@@ -505,8 +506,12 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         // Keep the member's existing ID (and its issue/expiry dates) unless they moved to another tier
         const previousId = memberProfile?.employeeId || "";
         const keepExistingId = !!previousId && previousId.startsWith(`${getPrefixForTier(tierKey)}-`);
-        const employeeId = keepExistingId ? previousId : await getNextEmployeeId(tierKey);
-        isUpdate = keepExistingId;
+        const employeeId = formData.employeeId
+          ? formData.employeeId.trim()
+          : keepExistingId
+            ? previousId
+            : await getNextEmployeeId(tierKey);
+        isUpdate = keepExistingId && employeeId === previousId;
 
         const now = new Date();
         const issuedDate = (keepExistingId && memberProfile?.issuedDate) || formatCardDate(now);
@@ -627,7 +632,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       );
       // Sync with Firestore in the background; the saved profile is already shown
       if (!issuedForSomeoneElse) {
-        refreshProfile().catch(() => {});
+        refreshProfile().catch(() => { });
       }
     } catch (err: any) {
       console.error("ID Card generation error:", err);
@@ -699,7 +704,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
               cardElement.querySelector<HTMLImageElement>('img[alt*="Photo"], img[alt*="Member"]');
             if (photoImg) {
               photoImg.src = inlinedDataUrl;
-              await photoImg.decode().catch(() => {});
+              await photoImg.decode().catch(() => { });
             }
           }
         } catch (convErr) {
@@ -775,7 +780,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
               cardElement.querySelector<HTMLImageElement>('img[alt*="Photo"], img[alt*="Member"]');
             if (photoImg) {
               photoImg.src = inlinedDataUrl;
-              await photoImg.decode().catch(() => {});
+              await photoImg.decode().catch(() => { });
             }
           }
         } catch (convErr) {
@@ -977,28 +982,25 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                   key={plan.id}
                   type="button"
                   onClick={() => handleTierChange(plan.tierTheme)}
-                  className={`px-3 py-1.5 rounded-md text-[11px] font-black flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border ${
-                    isSelected
+                  className={`px-3 py-1.5 rounded-md text-[11px] font-black flex items-center gap-1.5 transition-all cursor-pointer whitespace-nowrap border ${isSelected
                       ? isGreen
                         ? "bg-[#059669] text-white border-[#047857] shadow-sm"
                         : isBlue
-                        ? "bg-[#0284C7] text-white border-[#0369A1] shadow-sm"
-                        : "bg-[#EA580C] text-white border-[#C2410C] shadow-sm"
+                          ? "bg-[#0284C7] text-white border-[#0369A1] shadow-sm"
+                          : "bg-[#EA580C] text-white border-[#C2410C] shadow-sm"
                       : "bg-white text-[#334155] border-[#CBD5E1] hover:bg-gray-50"
-                  }`}
+                    }`}
                 >
                   <span
-                    className={`w-2 h-2 rounded-full ${
-                      isSelected ? "bg-white" : isGreen ? "bg-[#059669]" : isBlue ? "bg-[#0284C7]" : "bg-[#EA580C]"
-                    }`}
+                    className={`w-2 h-2 rounded-full ${isSelected ? "bg-white" : isGreen ? "bg-[#059669]" : isBlue ? "bg-[#0284C7]" : "bg-[#EA580C]"
+                      }`}
                   />
                   <span>{plan.title}</span>
                   <span
-                    className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-extrabold ${
-                      isSelected
+                    className={`text-[9.5px] px-1.5 py-0.2 rounded-full font-extrabold ${isSelected
                         ? "bg-white/20 text-white"
                         : "bg-[#F1F5F9] text-[#0F172A] border border-[#CBD5E1]"
-                    }`}
+                      }`}
                   >
                     {plan.price}
                   </span>
@@ -1334,9 +1336,10 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                   </div>
                   <input
                     type="text"
-                    readOnly
                     value={formData.employeeId}
-                    className="w-full px-2.5 py-1.5 text-[11.5px] font-mono font-bold text-[#073F73] bg-[#EEF6FC] border border-[#BFDBFE] rounded-md cursor-not-allowed"
+                    onChange={(e) => setFormData((prev) => ({ ...prev, employeeId: e.target.value }))}
+                    placeholder="e.g. RM-A-1116"
+                    className="w-full px-2.5 py-1.5 text-[11.5px] font-mono font-bold text-[#073F73] bg-[#FAFBFD] border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent"
                   />
                 </div>
 
@@ -1424,13 +1427,12 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
               <div className="w-full flex items-center justify-between border-b border-[#E2E8F0] pb-2 mb-3">
                 <div className="flex items-center gap-1.5">
                   <span
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      selectedTier === "green"
+                    className={`w-2.5 h-2.5 rounded-full ${selectedTier === "green"
                         ? "bg-[#059669]"
                         : selectedTier === "blue"
-                        ? "bg-[#0284C7]"
-                        : "bg-[#EA580C]"
-                    }`}
+                          ? "bg-[#0284C7]"
+                          : "bg-[#EA580C]"
+                      }`}
                   />
                   <span className="text-[11.5px] font-black uppercase text-[#0F172A]">
                     Live CR80 Card Preview
