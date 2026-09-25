@@ -36,11 +36,12 @@ import {
   peekNextEmployeeId,
   saveMemberProfile,
   saveIdCardRecord,
+  getIdCardRecord,
   retireIdCardRecord,
   MemberProfileData,
 } from "@/lib/firebase/db";
 import { uploadMemberPhoto, compressImage, toFirestoreSafePhoto } from "@/lib/firebase/storage";
-import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
+import { getSafePhotoUrl, convertUrlToDataUrl } from "@/lib/utils/imageUtils";
 
 export interface IdCardModalProps {
   isOpen: boolean;
@@ -115,30 +116,43 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   const buildInitialForm = () => ({
     name:
       initialEmployee?.name ||
-      memberProfile?.fullName ||
-      (selfUser?.displayName && selfUser.displayName !== "Verified Member" ? selfUser.displayName : "") ||
+      (isSelfMode ? memberProfile?.fullName || (selfUser?.displayName && selfUser.displayName !== "Verified Member" ? selfUser.displayName : "") : "") ||
       "",
-    mobile: initialEmployee?.phone || memberProfile?.phone || memberProfile?.mobile || "",
-    email: initialEmployee?.email || memberProfile?.email || selfUser?.email || "",
+    mobile: initialEmployee?.phone || (isSelfMode ? memberProfile?.phone || memberProfile?.mobile : "") || "",
+    email: initialEmployee?.email || (isSelfMode ? memberProfile?.email || selfUser?.email : "") || "",
     location:
       initialEmployee?.location ||
-      memberProfile?.location ||
-      (memberProfile?.city ? `${memberProfile.city}, ${memberProfile.state || "India"}` : ""),
-    agencyName: initialEmployee?.agencyName || memberProfile?.agencyName || memberProfile?.companyName || "",
+      (isSelfMode ? memberProfile?.location || (memberProfile?.city ? `${memberProfile.city}, ${memberProfile.state || "India"}` : "") : "") ||
+      "",
+    agencyName:
+      initialEmployee?.agencyName ||
+      (isSelfMode ? memberProfile?.agencyName || memberProfile?.companyName : "") ||
+      "",
     licenseNumber:
       initialEmployee?.licenseNumber ||
       initialEmployee?.reraNumber ||
-      memberProfile?.licenseNumber ||
-      memberProfile?.reraNo ||
+      (isSelfMode ? memberProfile?.licenseNumber || memberProfile?.reraNo : "") ||
       "",
-    experience: initialEmployee?.experience || memberProfile?.experience || memberProfile?.experienceYears || "",
-    specialization: initialEmployee?.specialization || memberProfile?.specialization || "Residential Properties",
+    experience:
+      initialEmployee?.experience ||
+      (isSelfMode ? memberProfile?.experience || memberProfile?.experienceYears : "") ||
+      "",
+    specialization:
+      initialEmployee?.specialization ||
+      (isSelfMode ? memberProfile?.specialization : "") ||
+      "Residential Properties",
     // Never pre-fill a placeholder photo: a real photo is mandatory for the card
-    photo: initialEmployee?.photo || memberProfile?.photoUrl || memberProfile?.photo || selfUser?.photoURL || "",
-    employeeId: initialEmployee?.employeeId || memberProfile?.employeeId || "",
-    issuedDate: initialEmployee?.issuedDate || memberProfile?.issuedDate || "",
-    validTill: initialEmployee?.validTill || memberProfile?.validTill || "",
-    department: initialEmployee?.department || memberProfile?.department || "Property Sales & Channel",
+    photo:
+      initialEmployee?.photo ||
+      (initialEmployee as any)?.photoUrl ||
+      (isSelfMode ? memberProfile?.photoUrl || memberProfile?.photo || selfUser?.photoURL || "" : ""),
+    employeeId: initialEmployee?.employeeId || (isSelfMode ? memberProfile?.employeeId || "" : ""),
+    issuedDate: initialEmployee?.issuedDate || (isSelfMode ? memberProfile?.issuedDate || "" : ""),
+    validTill: initialEmployee?.validTill || (isSelfMode ? memberProfile?.validTill || "" : ""),
+    department:
+      initialEmployee?.department ||
+      (isSelfMode ? memberProfile?.department : "") ||
+      "Property Sales & Channel",
     password: "",
     confirmPassword: "",
   });
@@ -192,7 +206,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     }
   };
 
-  // Reset the form every time the modal is opened so stale edits/success states don't leak between sessions
+  // Reset the form every time the modal is opened or employee changes so stale edits/success states don't leak between sessions
   useEffect(() => {
     if (!isOpen) return;
     const tier = normalizeTier(initialTier);
@@ -204,7 +218,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     setPhotoError(null);
     resolvePreviewId(tier);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, initialEmployee?.employeeId, initialEmployee?.name, initialEmployee?.photo, (initialEmployee as any)?.photoUrl]);
 
   // If the member profile finishes loading while the modal is open, fill in fields the user hasn't typed yet
   useEffect(() => {
@@ -588,7 +602,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       }
 
       // Only update the signed-in session when the card belongs to the signed-in member
-      if (!issuedForSomeoneElse) {
+      if (isSelfMode && !issuedForSomeoneElse) {
         if (typeof window !== "undefined") {
           localStorage.setItem("rm_member_profile", JSON.stringify(savedProfile));
         }
@@ -662,11 +676,44 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       const cardElement = document.getElementById("modal-realtors-id-card");
       if (!cardElement) throw new Error("ID card preview not found");
 
+      // 1. Authoritative Photo Resolution: Always pull the exact active member picture from database
+      let targetPhoto = formData.photo || (initialEmployee as any)?.photoUrl || initialEmployee?.photo;
+      if (formData.employeeId) {
+        try {
+          const dbCard = await getIdCardRecord(formData.employeeId);
+          if (dbCard && (dbCard.photoUrl || dbCard.photo)) {
+            targetPhoto = dbCard.photoUrl || dbCard.photo || targetPhoto;
+          }
+        } catch (dbErr) {
+          console.warn("Could not check idCards for fresh photo:", dbErr);
+        }
+      }
+
+      // 2. Pre-fetch and inline image as base64 Data URL to bypass html-to-image internal cache
+      if (targetPhoto && !targetPhoto.startsWith("data:")) {
+        try {
+          const inlinedDataUrl = await convertUrlToDataUrl(targetPhoto);
+          if (inlinedDataUrl) {
+            const photoImg =
+              cardElement.querySelector<HTMLImageElement>('img[data-profile-photo="true"]') ||
+              cardElement.querySelector<HTMLImageElement>('img[alt*="Photo"], img[alt*="Member"]');
+            if (photoImg) {
+              photoImg.src = inlinedDataUrl;
+              await photoImg.decode().catch(() => {});
+            }
+          }
+        } catch (convErr) {
+          console.warn("Could not inline photo data URL before export:", convErr);
+        }
+      }
+
       const dataUrl = await toPng(cardElement, {
         quality: 1,
         pixelRatio: 3, // 300 DPI for crisp physical printing (1914 x 3048px)
         width: 638,
         height: 1016,
+        cacheBust: true,
+        includeQueryParams: true,
         style: {
           transform: "none",
           transformOrigin: "top left",
@@ -705,11 +752,44 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
         return;
       }
 
+      // 1. Authoritative Photo Resolution: Always pull the exact active member picture from database
+      let targetPhoto = formData.photo || (initialEmployee as any)?.photoUrl || initialEmployee?.photo;
+      if (formData.employeeId) {
+        try {
+          const dbCard = await getIdCardRecord(formData.employeeId);
+          if (dbCard && (dbCard.photoUrl || dbCard.photo)) {
+            targetPhoto = dbCard.photoUrl || dbCard.photo || targetPhoto;
+          }
+        } catch (dbErr) {
+          console.warn("Could not check idCards for fresh photo:", dbErr);
+        }
+      }
+
+      // 2. Pre-fetch and inline image as base64 Data URL to bypass html-to-image internal cache
+      if (targetPhoto && !targetPhoto.startsWith("data:")) {
+        try {
+          const inlinedDataUrl = await convertUrlToDataUrl(targetPhoto);
+          if (inlinedDataUrl) {
+            const photoImg =
+              cardElement.querySelector<HTMLImageElement>('img[data-profile-photo="true"]') ||
+              cardElement.querySelector<HTMLImageElement>('img[alt*="Photo"], img[alt*="Member"]');
+            if (photoImg) {
+              photoImg.src = inlinedDataUrl;
+              await photoImg.decode().catch(() => {});
+            }
+          }
+        } catch (convErr) {
+          console.warn("Could not inline photo data URL before export:", convErr);
+        }
+      }
+
       const dataUrl = await toPng(cardElement, {
         quality: 1,
         pixelRatio: 3,
         width: 638,
         height: 1016,
+        cacheBust: true,
+        includeQueryParams: true,
         style: {
           transform: "none",
           transformOrigin: "top left",

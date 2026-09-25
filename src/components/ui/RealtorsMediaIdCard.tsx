@@ -162,7 +162,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
   const gid = id.replace(/[^a-zA-Z0-9_-]/g, "");
 
   const rawPhoto = employee.photo || (employee as any).photoUrl || PLACEHOLDER_PHOTO;
-  const displayPhoto = getSafePhotoUrl(rawPhoto);
+  const displayPhoto = getSafePhotoUrl(rawPhoto, employee?.employeeId);
 
   const qrValue = employee.employeeId
     ? `https://www.realtorsmedia.world/verify/${employee.employeeId}`
@@ -266,6 +266,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={displayPhoto}
+              data-profile-photo="true"
               alt={employee.name || "Member Photo"}
               className="w-full h-full object-cover object-top"
               crossOrigin={displayPhoto.startsWith("http") ? "anonymous" : undefined}

@@ -76,6 +76,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await fetchProfile(currentUser.uid, currentUser.email);
       } else {
         setMemberProfile(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("rm_member_profile");
+        }
       }
       setLoading(false);
     });

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const imageUrl = searchParams.get("url");
@@ -15,7 +18,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const res = await fetch(imageUrl, {
-      cache: "force-cache",
+      cache: "no-store",
     });
 
     if (!res.ok) {
@@ -37,7 +40,9 @@ export async function GET(request: NextRequest) {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
         "Access-Control-Allow-Headers": "*",
-        "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800",
+        "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
       },
     });
   } catch (error: any) {
