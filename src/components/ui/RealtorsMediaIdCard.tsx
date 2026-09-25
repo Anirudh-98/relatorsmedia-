@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useRef, useState, useEffect } from "react";
-import Image from "next/image";
 import { QRCodeSVG } from "qrcode.react";
 import { FaPhoneAlt, FaGlobe, FaEnvelope, FaMapMarkerAlt } from "react-icons/fa";
 import { BarcodeSVG } from "./BarcodeSVG";
@@ -39,36 +38,76 @@ const CANVAS_HEIGHT = 1016;
 
 const THEME_CONFIGS = {
   orange: {
-    gradStart: "#A81D22",
-    gradMid: "#C52227",
-    gradEnd: "#DC3032",
+    bgSvg: "/Id card.svg?v=3",
+    stops: [
+      { offset: "0%", color: "#973620" },
+      { offset: "13%", color: "#bb4126" },
+      { offset: "43%", color: "#d74c27" },
+      { offset: "50%", color: "#db5934" },
+      { offset: "72%", color: "#e9825d" },
+      { offset: "89%", color: "#f19b76" },
+      { offset: "100%", color: "#f5a580" },
+    ],
+    gradStart: "#973620",
+    gradMid: "#db5934",
+    gradEnd: "#f5a580",
+    accentDark: "#7A0E12",
     badgeBg: "linear-gradient(135deg, #B91C1C, #EF4444)",
     badgeText: "VIP ELITE PARTNER",
-    accentDark: "#7F1519",
   },
   red: {
-    gradStart: "#A81D22",
-    gradMid: "#C52227",
-    gradEnd: "#DC3032",
+    bgSvg: "/Id card.svg?v=3",
+    stops: [
+      { offset: "0%", color: "#973620" },
+      { offset: "13%", color: "#bb4126" },
+      { offset: "43%", color: "#d74c27" },
+      { offset: "50%", color: "#db5934" },
+      { offset: "72%", color: "#e9825d" },
+      { offset: "89%", color: "#f19b76" },
+      { offset: "100%", color: "#f5a580" },
+    ],
+    gradStart: "#973620",
+    gradMid: "#db5934",
+    gradEnd: "#f5a580",
+    accentDark: "#7A0E12",
     badgeBg: "linear-gradient(135deg, #B91C1C, #EF4444)",
     badgeText: "VIP ELITE PARTNER",
-    accentDark: "#7F1519",
   },
   blue: {
-    gradStart: "#072C59",
-    gradMid: "#0A4C8F",
-    gradEnd: "#0E67BE",
+    bgSvg: "/Id card-blue.svg?v=3",
+    stops: [
+      { offset: "0%", color: "#072B58" },
+      { offset: "13%", color: "#0A3B75" },
+      { offset: "43%", color: "#0D529C" },
+      { offset: "50%", color: "#0284C7" },
+      { offset: "72%", color: "#38BDF8" },
+      { offset: "89%", color: "#7DD3FC" },
+      { offset: "100%", color: "#BAE6FD" },
+    ],
+    gradStart: "#072B58",
+    gradMid: "#0A4F96",
+    gradEnd: "#0284C7",
+    accentDark: "#041C3A",
     badgeBg: "linear-gradient(135deg, #073F73, #0284C7)",
     badgeText: "EXECUTIVE MEMBER",
-    accentDark: "#041F3F",
   },
   green: {
+    bgSvg: "/Id card-green.svg?v=3",
+    stops: [
+      { offset: "0%", color: "#064E3B" },
+      { offset: "13%", color: "#065F46" },
+      { offset: "43%", color: "#047857" },
+      { offset: "50%", color: "#059669" },
+      { offset: "72%", color: "#10B981" },
+      { offset: "89%", color: "#34D399" },
+      { offset: "100%", color: "#6EE7B7" },
+    ],
     gradStart: "#064E3B",
     gradMid: "#059669",
     gradEnd: "#10B981",
+    accentDark: "#033326",
     badgeBg: "linear-gradient(135deg, #065F46, #059669)",
     badgeText: "VERIFIED REALTOR",
-    accentDark: "#033326",
   },
 };
 
@@ -105,10 +144,10 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
   const empTierFromId = employee?.employeeId?.startsWith("RM-C")
     ? "green"
     : employee?.employeeId?.startsWith("RM-A")
-    ? "orange"
-    : employee?.employeeId?.startsWith("RM-B")
-    ? "blue"
-    : undefined;
+      ? "orange"
+      : employee?.employeeId?.startsWith("RM-B")
+        ? "blue"
+        : undefined;
 
   const activeThemeKey = (theme || employee?.theme || empTierFromId || "orange") as keyof typeof THEME_CONFIGS;
   const T = THEME_CONFIGS[activeThemeKey] || THEME_CONFIGS.orange;
@@ -120,21 +159,21 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
   const qrValue = employee.employeeId
     ? `https://www.realtorsmedia.world/verify/${employee.employeeId}`
     : (employee.verificationUrl || "https://www.realtorsmedia.world")
-        .replace("realtorsmedia.com", "www.realtorsmedia.world")
-        .replace("https://realtorsmedia.world", "https://www.realtorsmedia.world");
+      .replace("realtorsmedia.com", "www.realtorsmedia.world")
+      .replace("https://realtorsmedia.world", "https://www.realtorsmedia.world");
 
   const badgeText =
     employee?.designation &&
-    ["VIP ELITE PARTNER", "EXECUTIVE MEMBER", "EXECUTIVE PARTNER", "VERIFIED REALTOR"].includes(
-      employee.designation.toUpperCase()
-    )
+      ["VIP ELITE PARTNER", "EXECUTIVE MEMBER", "EXECUTIVE PARTNER", "VERIFIED REALTOR"].includes(
+        employee.designation.toUpperCase()
+      )
       ? employee.designation.toUpperCase()
       : T.badgeText;
 
   const infoRows = [
-    { label: "EMP ID",     value: employee.employeeId || "RM-A-1116" },
+    { label: "EMP ID", value: employee.employeeId || "RM-A-1116" },
     { label: "SPECIALITY", value: employee.specialization || employee.department || "All Properties" },
-    { label: "LOCATION",   value: employee.location || "Hyderabad" },
+    { label: "LOCATION", value: employee.location || "Hyderabad" },
     { label: "VALID TILL", value: employee.validTill || "31 Dec 2028" },
   ];
 
@@ -161,94 +200,52 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
           borderRadius: "36px",
           clipPath: "inset(0 round 36px)",
           WebkitClipPath: "inset(0 round 36px)",
+          // Inter across all card text for crisp, legible print output
+          fontFamily: "var(--font-inter), Inter, Arial, Helvetica, sans-serif",
+          textRendering: "optimizeLegibility",
         }}
         className="absolute top-0 left-0 overflow-hidden bg-white text-[#0F172A] antialiased shadow-xl border border-[#E2E8F0]"
       >
 
         {/* ══════════════════════════════════════════════════════════
-            1. SVG BACKGROUND — top-left wave, top-right banner,
-               and bottom-left layered curves matching reference
+            1. CARD STYLING SVG (from public/Id card.svg)
+               Direct vector asset matching public/Id card.svg
            ══════════════════════════════════════════════════════════ */}
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none z-0"
-          viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          <defs>
-            <linearGradient id={`${gid}-header-grad`} x1="195" y1="0" x2="638" y2="260" gradientUnits="userSpaceOnUse">
-              <stop offset="0%"   stopColor={T.gradStart} />
-              <stop offset="50%"  stopColor={T.gradMid} />
-              <stop offset="100%" stopColor={T.gradEnd} />
-            </linearGradient>
-            <clipPath id={`${gid}-clip`}>
-              <rect x="0" y="0" width={CANVAS_WIDTH} height={CANVAS_HEIGHT} rx="36" ry="36" />
-            </clipPath>
-          </defs>
-          <g clipPath={`url(#${gid}-clip)`}>
-            {/* White card base */}
-            <rect width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill="#FFFFFF" />
-
-            {/* Top-left corner decorative wave */}
-            <path
-              d="M 0 0 L 85 0 C 50 30 25 55 0 85 Z"
-              fill={`url(#${gid}-header-grad)`}
-            />
-            {/* Top-left corner inner accent */}
-            <path
-              d="M 0 0 L 45 0 C 25 18 12 35 0 52 Z"
-              fill={T.accentDark}
-              opacity="0.85"
-            />
-
-            {/* Top-right main header wave banner */}
-            <path
-              d="M 195 0 C 180 60 195 125 240 165 C 285 205 360 220 460 215 C 530 210 590 225 638 258 L 638 0 Z"
-              fill={`url(#${gid}-header-grad)`}
-            />
-
-            {/* Bottom-left layered waves */}
-            {/* Layer 1: Darker inner accent */}
-            <path
-              d="M 0 880 C 60 905 140 955 200 1016 L 0 1016 Z"
-              fill={T.accentDark}
-            />
-            {/* Layer 2: Main outer wave */}
-            <path
-              d="M 0 835 C 50 855 130 910 225 970 C 270 998 305 1010 335 1016 L 0 1016 Z"
-              fill={`url(#${gid}-header-grad)`}
-            />
-          </g>
-        </svg>
-
-        {/* ══════════════════════════════════════════════════════════
-            2. LOGO — top-left on white background
-           ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[36px] top-[42px] z-10 w-[130px] h-[110px]">
-          <div className="relative w-full h-full">
-            <Image
-              src="/idcard-logo.png"
-              alt="Realtors Media Logo"
-              fill
-              sizes="260px"
-              className="object-contain"
-              priority
-              unoptimized
-            />
-          </div>
+        {/* -inset-px: bleed over the 1px border so the wave reaches the card edge */}
+        <div className="absolute -inset-px pointer-events-none z-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={T.bgSvg || "/Id card.svg"}
+            alt="Card Styling Background"
+            className="w-full h-full object-fill select-none pointer-events-none"
+            loading="eager"
+          />
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            3. BRAND HEADER TEXT — inside the wave banner
+            2. LOGO — sits nestled in the top-left white inlet
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[248px] top-[42px] z-10 pr-[24px]">
-          <div className="text-white font-black text-[38px] tracking-tight leading-none uppercase">
+        <div className="absolute left-[18px] top-[62px] z-10 w-[135px] h-[115px] flex items-center justify-start">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/idcard-logo.png"
+            alt="Realtors Media Logo"
+            className="w-auto h-auto max-w-full max-h-full object-contain select-none pointer-events-none"
+            style={{ aspectRatio: "1356 / 1159" }}
+          />
+        </div>
+
+        {/* ══════════════════════════════════════════════════════════
+            3. BRAND HEADER TEXT — centered inside the wave banner
+           ══════════════════════════════════════════════════════════ */}
+        <div className="absolute left-[185px] right-[18px] top-[28px] z-10 flex flex-col items-center justify-center text-center">
+          <div className="text-white font-black italic text-[40px] tracking-tight leading-none uppercase">
             REALTORS MEDIA
           </div>
-          <div className="text-white font-medium text-[18px] mt-[10px] tracking-normal leading-snug">
+          <div className="text-white/95 font-medium text-[18px] mt-[10px] tracking-normal leading-snug">
             India&apos;s Real Estate Media Platform
           </div>
-          <div className="text-white/90 font-normal text-[16px] mt-[6px] tracking-normal leading-snug">
+          <div className="text-white/85 font-normal text-[16px] mt-[5px] tracking-normal leading-snug">
             People | Properties | Possibilities
           </div>
         </div>
@@ -256,8 +253,8 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             4. PROFILE PHOTO — left column with solid black border
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[42px] top-[212px] z-10">
-          <div className="w-[195px] h-[195px] rounded-[24px] overflow-hidden border-[2.5px] border-black shadow-sm bg-[#F1F5F9]">
+        <div className="absolute left-[42px] top-[215px] z-10">
+          <div className="w-[195px] h-[195px] rounded-[20px] overflow-hidden border-[2.5px] border-black shadow-sm bg-[#F1F5F9]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={displayPhoto}
@@ -276,12 +273,12 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             5. TIER PILL BADGE — directly below photo
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[42px] top-[426px] z-10 w-[195px] flex items-center justify-center">
+        <div className="absolute left-[30px] top-[426px] z-10 w-[220px] flex items-center justify-center">
           <div
-            className="px-5 py-[6px] rounded-full shadow-xs text-center flex items-center justify-center"
+            className="px-[18px] py-[7px] rounded-full text-center flex items-center justify-center"
             style={{ background: T.badgeBg }}
           >
-            <span className="text-white text-[13.5px] font-black uppercase tracking-wider leading-none">
+            <span className="text-white text-[14px] font-black uppercase tracking-wider leading-none">
               {badgeText}
             </span>
           </div>
@@ -290,8 +287,8 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             6. MEMBER NAME — solid black bold font
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[42px] top-[490px] z-10 w-[320px]">
-          <h1 className="text-[36px] font-black tracking-tight leading-tight text-black truncate">
+        <div className="absolute left-[42px] top-[486px] z-10 w-[340px]">
+          <h1 className="text-[38px] font-black tracking-tight leading-tight text-black truncate">
             {employee.name || "Ravi Varma"}
           </h1>
         </div>
@@ -299,13 +296,13 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             7. INFO GRID (4 rows) — vertically aligned colons
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[42px] top-[565px] z-10 w-[345px] space-y-[13px]">
+        <div className="absolute left-[42px] top-[556px] z-10 w-[370px] space-y-[12px]">
           {infoRows.map(({ label, value }) => (
-            <div key={label} className="grid grid-cols-[130px_18px_1fr] items-baseline">
-              <span className="text-[17px] font-bold text-[#0F172A] uppercase tracking-wide">
+            <div key={label} className="grid grid-cols-[135px_18px_1fr] items-baseline">
+              <span className="text-[17px] font-bold text-[#000000] uppercase tracking-wide">
                 {label}
               </span>
-              <span className="text-[17px] font-bold text-[#0F172A] text-center">:</span>
+              <span className="text-[17px] font-bold text-[#000000] text-center">:</span>
               <span className="text-[19px] font-black text-[#000000] truncate">
                 {value}
               </span>
@@ -314,11 +311,22 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            8. AUTHORIZED SIGNATURE — line & label
+            8. AUTHORIZED SIGNATURE — Koti Sir signature & line
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[42px] top-[792px] z-10 w-[275px]">
-          <div className="w-full h-[2px] bg-black mb-2" />
-          <div className="text-[12px] font-bold uppercase tracking-[0.14em] text-[#0F172A] leading-none">
+        <div className="absolute left-[37px] top-[696px] z-10 w-[250px] flex flex-col items-center">
+          <div className="w-[250px] h-[92px] -mb-1 flex items-end justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/images/Koti Sir Signature.png"
+              alt="Authorized Signature"
+              className="w-full h-full object-contain object-bottom select-none pointer-events-none"
+            />
+          </div>
+          <div className="w-[250px] h-[2px] bg-black mb-[6px]" />
+          <div
+            className="w-full text-center text-[12.5px] font-bold uppercase tracking-[0.12em] leading-none"
+            style={{ color: T.gradMid }}
+          >
             AUTHORIZED SIGNATURE
           </div>
         </div>
@@ -326,7 +334,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             9. BARCODE — top right of body below header wave
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[36px] top-[254px] z-10 w-[195px] h-[52px] flex items-center justify-end">
+        <div className="absolute right-[36px] top-[240px] z-10 w-[195px] h-[52px] flex items-center justify-end">
           <BarcodeSVG
             value={employee.employeeId || "RM-A-1116"}
             className="w-full h-full"
@@ -337,8 +345,8 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             10. SLOGAN — right-aligned bold text
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[36px] top-[326px] z-10 text-right">
-          <div className="text-[19px] font-black uppercase text-[#000000] tracking-tight leading-[1.25]">
+        <div className="absolute right-[36px] top-[308px] z-10 text-right">
+          <div className="text-[19px] font-black uppercase text-[#000000] tracking-tight leading-[1.3]">
             BUILDING<br />
             BETTER<br />
             COMMUNITIES<br />
@@ -347,9 +355,9 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            11. QR CODE — clean, framed directly on white
+            11. QR CODE — right side below slogan
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[36px] top-[458px] z-10">
+        <div className="absolute right-[36px] top-[442px] z-10">
           <QRCodeSVG
             value={qrValue}
             size={106}
@@ -360,18 +368,33 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            12. BUILDING WATERMARK — skyscraper illustration with clouds
+            12. BUILDING WATERMARK — skyscraper illustration with cloud fade
            ══════════════════════════════════════════════════════════ */}
-        <div
-          className="absolute right-0 top-[575px] w-[260px] h-[290px] pointer-events-none z-[2] opacity-[0.38]"
-          style={{
-            backgroundImage: "url('/images/building_watermark.jpg')",
-            backgroundSize: "contain",
-            backgroundPosition: "top right",
-            backgroundRepeat: "no-repeat",
-            mixBlendMode: "multiply",
-          }}
-        />
+        <div className="absolute right-[-10px] top-[520px] w-[290px] h-[330px] pointer-events-none z-[2] opacity-[0.4] overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/images/city-skyline-with-building-middle-clouds.jpg.jpeg"
+            alt="Building Watermark"
+            className="w-full h-full object-contain object-bottom"
+            style={{
+              mixBlendMode: "multiply",
+            }}
+          />
+          {/* Soft cloud/fog fade at the base of the buildings */}
+          <div
+            className="absolute bottom-0 left-0 right-0 h-[80px] pointer-events-none"
+            style={{
+              background: "linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 45%, rgba(255,255,255,1) 100%)",
+            }}
+          />
+          {/* Left-side fade so buildings don't have a hard left edge */}
+          <div
+            className="absolute top-0 left-0 bottom-0 w-[60px] pointer-events-none"
+            style={{
+              background: "linear-gradient(to right, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)",
+            }}
+          />
+        </div>
 
         {/* ══════════════════════════════════════════════════════════
             13. FOOTER — right-aligned contact info with black icons
@@ -402,3 +425,4 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
     </div>
   );
 };
+
