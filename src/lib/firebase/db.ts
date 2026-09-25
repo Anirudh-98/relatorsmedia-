@@ -441,14 +441,12 @@ export async function getLastGeneratedSequenceFromDatabase(targetPrefix?: string
     console.warn("Could not inspect counters document:", err);
   }
 
-  // 4. Check client localStorage fallback
+  // 4. Keep client localStorage in sync with authoritative database sequence
   if (typeof window !== "undefined") {
-    const local = localStorage.getItem("rm_member_seq");
-    if (local) {
-      const parsed = parseInt(local, 10);
-      if (!isNaN(parsed) && parsed > highest) {
-        highest = parsed;
-      }
+    try {
+      localStorage.setItem("rm_member_seq", highest.toString());
+    } catch {
+      // Ignore storage errors
     }
   }
 
