@@ -52,7 +52,7 @@ const THEME_CONFIGS = {
     gradMid: "#db5934",
     gradEnd: "#f5a580",
     accentDark: "#7A0E12",
-    badgeBg: "linear-gradient(135deg, #B91C1C, #EF4444)",
+    badgeBg: "linear-gradient(135deg, rgb(204, 72, 38), rgb(235, 110, 65))",
     badgeText: "VIP ELITE PARTNER",
   },
   red: {
@@ -271,7 +271,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             2. LOGO — sits nestled in the top-left white inlet
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[27px] top-[69px] z-10 w-[108px] h-[112px] flex items-center justify-center">
+        <div className="absolute left-[13px] top-[32px] z-10 w-[131px] h-[150px] flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/images/RMLogo.png"
@@ -283,14 +283,14 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             3. BRAND HEADER TEXT — right-aligned inside the wave banner
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[50px] top-[42px] z-10 flex flex-col items-end text-right text-white">
-          <div className="text-[38px] font-bold leading-none uppercase">
+        <div className="absolute right-[36px] top-[38px] z-10 flex flex-col items-end text-right text-white">
+          <div className="text-[44px] font-bold leading-none uppercase tracking-[1.5px] whitespace-nowrap">
             REALTORS MEDIA
           </div>
-          <div className="text-[20.3px] font-normal leading-none mt-[14px]">
+          <div className="text-[22.5px] font-normal leading-none mt-[12px] tracking-[0.5px] whitespace-nowrap">
             India&rsquo;s Real Estate Media Platform
           </div>
-          <div className="text-[20.3px] font-normal leading-none mt-[10px]">
+          <div className="text-[22.5px] font-normal leading-none mt-[8px] tracking-[0.5px] whitespace-nowrap">
             People | Properties | Possibilities
           </div>
         </div>
@@ -317,12 +317,17 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            5. TIER TITLE — bold heading top-right, above barcode
+            5. TIER TITLE — gradient badge with rounded corners
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[27px] top-[239px] z-10 text-right">
-          <span className="text-[29px] font-bold uppercase leading-none text-black whitespace-nowrap">
-            {badgeText}
-          </span>
+        <div className="absolute right-[27px] top-[232px] z-10 flex justify-end">
+          <div
+            className="px-[16px] py-[6px] rounded-[10px] shadow-sm flex items-center justify-center"
+            style={{ background: T.badgeBg }}
+          >
+            <span className="text-[23px] font-bold uppercase leading-none text-white tracking-wide whitespace-nowrap">
+              {badgeText}
+            </span>
+          </div>
         </div>
 
         {/* ══════════════════════════════════════════════════════════
@@ -344,15 +349,15 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         <div className="absolute left-[50px] top-[555px] z-10 w-[460px]">
           {infoRows.map(({ label, value }) => (
             <div key={label} className="grid grid-cols-[176px_14px_1fr] items-baseline leading-[35.5px] text-black">
-              <span className="text-[28px] font-normal uppercase">
+              <span className="text-[28px] font-bold uppercase">
                 {label}
               </span>
-              <span className="text-[28px] font-normal text-center">:</span>
+              <span className="text-[28px] font-bold text-center">:</span>
               <FitText
                 text={value}
                 maxSize={29}
                 minSize={16}
-                className="pl-[18px] font-bold"
+                className="pl-[18px] font-normal"
               />
             </div>
           ))}
