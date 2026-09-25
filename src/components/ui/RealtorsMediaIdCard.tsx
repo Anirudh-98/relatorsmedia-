@@ -399,24 +399,24 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             13. FOOTER — right-aligned contact info with black icons
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[36px] top-[835px] z-10 text-right space-y-[6px]">
-          <div className="flex items-center justify-end gap-2 text-[13.5px] font-semibold text-[#000000]">
+        <div className="absolute right-[36px] top-[826px] z-10 text-right space-y-[6.5px]">
+          <div className="flex items-center justify-end gap-2.5 text-[15px] font-bold text-[#000000]">
             <span>www.realtorsmedia.world</span>
-            <FaGlobe className="text-black text-[15px] shrink-0" />
+            <FaGlobe className="text-black text-[16.5px] shrink-0" />
           </div>
-          <div className="flex items-center justify-end gap-2 text-[13.5px] font-semibold text-[#000000]">
-            <span>+91 7981524909, +91 7981524909</span>
-            <FaPhoneAlt className="text-black text-[13px] shrink-0" />
+          <div className="flex items-center justify-end gap-2.5 text-[15px] font-bold text-[#000000]">
+            <span>+91 8096792778, +91 9441185799</span>
+            <FaPhoneAlt className="text-black text-[14.5px] shrink-0" />
           </div>
-          <div className="flex items-center justify-end gap-2 text-[13.5px] font-semibold text-[#000000]">
-            <span>{employee.email || "realtorsmedia.info@gmail.com"}</span>
-            <FaEnvelope className="text-black text-[14px] shrink-0" />
+          <div className="flex items-center justify-end gap-2.5 text-[15px] font-bold text-[#000000]">
+            <span>realtormedia.info@gmail.com</span>
+            <FaEnvelope className="text-black text-[15.5px] shrink-0" />
           </div>
-          <div className="flex items-center justify-end gap-2 text-[13.5px] font-semibold text-[#000000]">
+          <div className="flex items-center justify-end gap-2.5 text-[15px] font-bold text-[#000000]">
             <span>Archana arcade, IT Complex</span>
-            <FaMapMarkerAlt className="text-black text-[15px] shrink-0" />
+            <FaMapMarkerAlt className="text-black text-[16.5px] shrink-0" />
           </div>
-          <div className="pr-[23px] text-[13.5px] font-semibold text-[#000000]">
+          <div className="pr-[26px] text-[15px] font-bold text-[#000000]">
             <span>South Bloch, 407</span>
           </div>
         </div>

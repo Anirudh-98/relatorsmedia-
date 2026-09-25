@@ -400,8 +400,8 @@ export const realtorsEmployees: RealtorsMediaEmployee[] = [
     photo: "/images/ravi_varma.jpg",
     verificationUrl: "https://www.realtorsmedia.world/verify/RM-A-1116",
     theme: "orange",
-    phone: "+91 7981524909",
-    email: "realtorsmedia.info@gmail.com",
+    phone: "+91 8096792778, +91 9441185799",
+    email: "realtormedia.info@gmail.com",
   },
 ];
 
