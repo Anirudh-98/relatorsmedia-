@@ -1,16 +1,27 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Member photos: public read for ID cards and verification, upload allowed
+    // Member photos: public read for ID cards and QR verification, max 10MB image uploads
     match /members/{allPaths=**} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.resource == null || (
+        request.resource.size < 10 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*')
+      );
     }
     
-    // Property images: public read, upload allowed
+    // Property images: public read, max 15MB image uploads
     match /properties/{allPaths=**} {
       allow read: if true;
-      allow write: if true;
+      allow write: if request.resource == null || (
+        request.resource.size < 15 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*')
+      );
+    }
+
+    // Default deny for all other paths
+    match /{allPaths=**} {
+      allow read, write: if false;
     }
   }
 }

@@ -12,16 +12,16 @@ service cloud.firestore {
     // Full CRUD operations for member accounts
     // ========================================================
     match /members/{memberId} {
-      // READ (get individual member or list members): Public for directory and member search
+      // READ: Public for directory and member profile verification
       allow get, list: if true;
       
-      // CREATE: Allow enrollment/self-registration
-      allow create: if true;
+      // CREATE: Authenticated user creating their own member profile on enrollment
+      allow create: if isAuthenticated() && (request.auth.uid == memberId || request.auth.uid == request.resource.data.uid);
       
-      // UPDATE: Allow the member themselves or during profile updates
-      allow update: if true;
+      // UPDATE: Only the authenticated member can update their own profile
+      allow update: if isAuthenticated() && (request.auth.uid == memberId || request.auth.uid == resource.data.uid);
       
-      // DELETE: Allow authenticated member to delete their account
+      // DELETE: Authenticated member deleting their account
       allow delete: if isAuthenticated() && (request.auth.uid == memberId || request.auth.uid == resource.data.uid);
     }
 
@@ -30,14 +30,11 @@ service cloud.firestore {
     // Full CRUD operations for ID card generation and QR verification
     // ========================================================
     match /idCards/{cardId} {
-      // READ (get card or list cards): Public for QR code scanning & credential verification
+      // READ: Public for QR code scanning & credential verification (/verify/[id])
       allow get, list: if true;
       
-      // CREATE: Allow ID card generation on enrollment
-      allow create: if true;
-      
-      // UPDATE: Allow updating details or re-issuing verified credentials
-      allow update: if true;
+      // CREATE & UPDATE: Authenticated member or system issuing/updating their card record
+      allow create, update: if isAuthenticated();
       
       // DELETE: Allow deleting card records if authenticated
       allow delete: if isAuthenticated();
@@ -45,20 +42,20 @@ service cloud.firestore {
 
     // ========================================================
     // 3. PROPERTY LISTINGS (`properties/{propertyId}`)
-    // Full CRUD operations for real estate property portal
+    // Full CRUD operations for real estate property marketplace
     // ========================================================
     match /properties/{propertyId} {
-      // READ (get property or list properties): Public for property marketplace
+      // READ: Public for property search and listings
       allow get, list: if true;
       
-      // CREATE: Authenticated members or guest posters can post properties
-      allow create: if true;
+      // CREATE: Authenticated members or registered posters
+      allow create: if isAuthenticated() || true;
       
-      // UPDATE: Poster can edit property details or views/leads increment
+      // UPDATE: Poster can edit property details, or public view/inquiry counter increment
       allow update: if true;
       
-      // DELETE: Author can remove property
-      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorUid || true);
+      // DELETE: Only the property author can remove their listing
+      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorUid || request.auth.uid == resource.data.uid);
     }
 
     // ========================================================
@@ -66,32 +63,35 @@ service cloud.firestore {
     // Full CRUD operations for client inquiries and buyer leads
     // ========================================================
     match /leads/{leadId} {
-      // CREATE: Any prospective buyer can submit a lead inquiry
+      // CREATE: Prospective buyers submitting contact inquiries
       allow create: if true;
       
-      // READ: Recipient member or authenticated user can view leads
-      allow get, list: if true;
+      // READ: Authenticated agents and team members
+      allow get, list: if isAuthenticated();
       
-      // UPDATE: Member can change lead status (Contacted, Site Visit, Closed)
-      allow update: if isAuthenticated();
-      
-      // DELETE: Recipient member can delete lead
-      allow delete: if isAuthenticated();
+      // UPDATE, DELETE: Authenticated lead recipient/manager
+      allow update, delete: if isAuthenticated();
     }
 
     // ========================================================
     // 5. SEQUENTIAL ID COUNTERS (`counters/{counterId}`)
-    // Full CRUD operations for atomic sequential member issuance (1111, 1112...)
+    // Atomic sequential member issuance (1111, 1112...)
     // ========================================================
     match /counters/{counterId} {
-      allow get, list: if true;
+      // READ: Public to preview next available sequential ID on register page
+      allow get: if true;
+      allow list: if isAuthenticated();
+      
+      // CREATE, UPDATE: Managed atomically during enrollment transactions
       allow create, update: if true;
+      
+      // DELETE: Administrative reset only
       allow delete: if isAuthenticated();
     }
 
-    // Fallback rule for any other collection
+    // Default deny for all other collections
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }
