@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, useEffect, useLayoutEffect } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { FaPhoneAlt, FaGlobe, FaEnvelope, FaMapMarkerAlt } from "react-icons/fa";
 import { BarcodeSVG } from "./BarcodeSVG";
@@ -109,6 +109,44 @@ const THEME_CONFIGS = {
     badgeBg: "linear-gradient(135deg, #065F46, #059669)",
     badgeText: "VERIFIED REALTOR",
   },
+};
+
+// Single-line text that shrinks its font until it fits its box (no "..." cut-off)
+const FitText: React.FC<{
+  text: string;
+  maxSize: number;
+  minSize: number;
+  className?: string;
+  as?: "span" | "h1";
+}> = ({ text, maxSize, minSize, className = "", as: Tag = "span" }) => {
+  const ref = useRef<HTMLElement>(null);
+  const [size, setSize] = useState(maxSize);
+
+  useLayoutEffect(() => {
+    const fit = () => {
+      const el = ref.current;
+      if (!el) return;
+      let s = maxSize;
+      el.style.fontSize = `${s}px`;
+      while (s > minSize && el.scrollWidth > el.clientWidth) {
+        s -= 0.5;
+        el.style.fontSize = `${s}px`;
+      }
+      setSize(s);
+    };
+    fit();
+    document.fonts?.ready.then(fit);
+  }, [text, maxSize, minSize]);
+
+  return (
+    <Tag
+      ref={ref as React.Ref<HTMLHeadingElement>}
+      className={`block min-w-0 whitespace-nowrap overflow-hidden ${className}`}
+      style={{ fontSize: `${size}px` }}
+    >
+      {text}
+    </Tag>
+  );
 };
 
 export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
@@ -233,27 +271,26 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             2. LOGO — sits nestled in the top-left white inlet
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[18px] top-[62px] z-10 w-[135px] h-[115px] flex items-center justify-start">
+        <div className="absolute left-[40px] top-[44px] z-10 w-[108px] h-[112px] flex items-center justify-center">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/idcard-logo.png"
+            src="/images/RMLogo.png"
             alt="Realtors Media Logo"
-            className="w-auto h-auto max-w-full max-h-full object-contain select-none pointer-events-none"
-            style={{ aspectRatio: "1356 / 1159" }}
+            className="w-full h-full object-contain select-none pointer-events-none"
           />
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            3. BRAND HEADER TEXT — centered inside the wave banner
+            3. BRAND HEADER TEXT — right-aligned inside the wave banner
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[185px] right-[18px] top-[28px] z-10 flex flex-col items-center justify-center text-center">
-          <div className="text-white font-black italic text-[40px] tracking-tight leading-none uppercase">
+        <div className="absolute right-[50px] top-[42px] z-10 flex flex-col items-end text-right text-white">
+          <div className="text-[38px] font-bold leading-none uppercase">
             REALTORS MEDIA
           </div>
-          <div className="text-white/95 font-medium text-[18px] mt-[10px] tracking-normal leading-snug">
-            India&apos;s Real Estate Media Platform
+          <div className="text-[20.3px] font-normal leading-none mt-[14px]">
+            India&rsquo;s Real Estate Media Platform
           </div>
-          <div className="text-white/85 font-normal text-[16px] mt-[5px] tracking-normal leading-snug">
+          <div className="text-[20.3px] font-normal leading-none mt-[10px]">
             People | Properties | Possibilities
           </div>
         </div>
@@ -261,8 +298,8 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             4. PROFILE PHOTO — left column with solid black border
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[42px] top-[215px] z-10">
-          <div className="w-[195px] h-[195px] rounded-[20px] overflow-hidden border-[2.5px] border-black shadow-sm bg-[#F1F5F9]">
+        <div className="absolute left-[43px] top-[218px] z-10">
+          <div className="w-[238px] h-[270px] rounded-[22px] overflow-hidden border-[2.5px] border-black bg-[#F1F5F9]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={displayPhoto}
@@ -280,41 +317,43 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            5. TIER PILL BADGE — directly below photo
+            5. TIER TITLE — bold heading top-right, above barcode
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[30px] top-[426px] z-10 w-[220px] flex items-center justify-center">
-          <div
-            className="px-[18px] py-[7px] rounded-full text-center flex items-center justify-center"
-            style={{ background: T.badgeBg }}
-          >
-            <span className="text-white text-[14px] font-black uppercase tracking-wider leading-none">
-              {badgeText}
-            </span>
-          </div>
+        <div className="absolute right-[27px] top-[239px] z-10 text-right">
+          <span className="text-[29px] font-bold uppercase leading-none text-black whitespace-nowrap">
+            {badgeText}
+          </span>
         </div>
 
         {/* ══════════════════════════════════════════════════════════
             6. MEMBER NAME — solid black bold font
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[42px] top-[486px] z-10 w-[340px]">
-          <h1 className="text-[38px] font-black tracking-tight leading-tight text-black truncate">
-            {employee.name || "Ravi Varma"}
-          </h1>
+        <div className="absolute left-[50px] top-[501px] z-10 w-[450px]">
+          <FitText
+            as="h1"
+            text={employee.name || "Ravi Varma"}
+            maxSize={40}
+            minSize={22}
+            className="font-bold leading-none text-black"
+          />
         </div>
 
         {/* ══════════════════════════════════════════════════════════
             7. INFO GRID (4 rows) — vertically aligned colons
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[42px] top-[556px] z-10 w-[370px] space-y-[12px]">
+        <div className="absolute left-[50px] top-[555px] z-10 w-[460px]">
           {infoRows.map(({ label, value }) => (
-            <div key={label} className="grid grid-cols-[135px_18px_1fr] items-baseline">
-              <span className="text-[17px] font-bold text-[#000000] uppercase tracking-wide">
+            <div key={label} className="grid grid-cols-[176px_14px_1fr] items-baseline leading-[35.5px] text-black">
+              <span className="text-[28px] font-normal uppercase">
                 {label}
               </span>
-              <span className="text-[17px] font-bold text-[#000000] text-center">:</span>
-              <span className="text-[19px] font-black text-[#000000] truncate">
-                {value}
-              </span>
+              <span className="text-[28px] font-normal text-center">:</span>
+              <FitText
+                text={value}
+                maxSize={29}
+                minSize={16}
+                className="pl-[18px] font-bold"
+              />
             </div>
           ))}
         </div>
@@ -322,28 +361,25 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             8. AUTHORIZED SIGNATURE — Koti Sir signature & line
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute left-[37px] top-[696px] z-10 w-[250px] flex flex-col items-center">
-          <div className="w-[250px] h-[92px] -mb-1 flex items-end justify-center">
+        <div className="absolute left-[50px] top-[700px] z-10 w-[278px] h-[140px]">
+          <div className="absolute left-[27px] top-[-7px] w-[197px] h-[118px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/images/Koti Sir Signature.png"
+              src="/images/KotiSirSignaturegreen.png"
               alt="Authorized Signature"
               className="w-full h-full object-contain object-bottom select-none pointer-events-none"
             />
           </div>
-          <div className="w-[250px] h-[2px] bg-black mb-[6px]" />
-          <div
-            className="w-full text-center text-[12.5px] font-bold uppercase tracking-[0.12em] leading-none"
-            style={{ color: T.gradMid }}
-          >
+          <div className="absolute left-0 top-[103px] w-[278px] h-[2.5px] bg-black" />
+          <div className="absolute left-0 top-[123px] text-[16px] font-normal uppercase leading-none text-black">
             AUTHORIZED SIGNATURE
           </div>
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            9. BARCODE — top right of body below header wave
+            9. BARCODE — right column below tier title
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[36px] top-[240px] z-10 w-[195px] h-[52px] flex items-center justify-end">
+        <div className="absolute right-[29px] top-[283px] z-10 w-[190px] h-[53px] flex items-center justify-end">
           <BarcodeSVG
             value={employee.employeeId || "RM-A-1116"}
             className="w-full h-full"
@@ -352,10 +388,10 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            10. SLOGAN — right-aligned bold text
+            10. SLOGAN — right-aligned regular text
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[36px] top-[308px] z-10 text-right">
-          <div className="text-[19px] font-black uppercase text-[#000000] tracking-tight leading-[1.3]">
+        <div className="absolute right-[27px] top-[347px] z-10 text-right">
+          <div className="text-[24px] font-normal uppercase text-black leading-[30px]">
             BUILDING<br />
             BETTER<br />
             COMMUNITIES<br />
@@ -366,10 +402,10 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             11. QR CODE — right side below slogan
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[36px] top-[442px] z-10">
+        <div className="absolute right-[27px] top-[487px] z-10">
           <QRCodeSVG
             value={qrValue}
-            size={106}
+            size={99}
             level="M"
             bgColor="transparent"
             fgColor="#000000"
@@ -377,56 +413,39 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            12. BUILDING WATERMARK — skyscraper illustration with cloud fade
+            12. BUILDING — glass towers bleeding off the right edge
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[-10px] top-[520px] w-[290px] h-[330px] pointer-events-none z-[2] opacity-[0.4] overflow-hidden">
+        <div className="absolute left-[426px] top-[613px] h-[213px] pointer-events-none z-[2]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/images/city-skyline-with-building-middle-clouds.jpg.jpeg"
-            alt="Building Watermark"
-            className="w-full h-full object-contain object-bottom"
-            style={{
-              mixBlendMode: "multiply",
-            }}
-          />
-          {/* Soft cloud/fog fade at the base of the buildings */}
-          <div
-            className="absolute bottom-0 left-0 right-0 h-[80px] pointer-events-none"
-            style={{
-              background: "linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.7) 45%, rgba(255,255,255,1) 100%)",
-            }}
-          />
-          {/* Left-side fade so buildings don't have a hard left edge */}
-          <div
-            className="absolute top-0 left-0 bottom-0 w-[60px] pointer-events-none"
-            style={{
-              background: "linear-gradient(to right, rgba(255,255,255,1) 0%, rgba(255,255,255,0) 100%)",
-            }}
+            src="/images/idcardbgimg.png"
+            alt="Building"
+            className="h-full w-auto max-w-none select-none pointer-events-none"
           />
         </div>
 
         {/* ══════════════════════════════════════════════════════════
             13. FOOTER — right-aligned contact info with black icons
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[36px] top-[826px] z-10 text-right space-y-[6.5px]">
-          <div className="flex items-center justify-end gap-2.5 text-[15px] font-bold text-[#000000]">
+        <div className="absolute right-[25px] top-[842px] z-10 text-right text-[20.3px] font-normal text-black">
+          <div className="flex items-center justify-end gap-[16px] leading-[33px]">
             <span>www.realtorsmedia.world</span>
-            <FaGlobe className="text-black text-[16.5px] shrink-0" />
+            <span className="w-[22px] flex justify-center"><FaGlobe className="text-[22px] shrink-0" /></span>
           </div>
-          <div className="flex items-center justify-end gap-2.5 text-[15px] font-bold text-[#000000]">
+          <div className="flex items-center justify-end gap-[16px] leading-[33px]">
             <span>+91 8096792778, +91 9441185799</span>
-            <FaPhoneAlt className="text-black text-[14.5px] shrink-0" />
+            <span className="w-[22px] flex justify-center"><FaPhoneAlt className="text-[19px] shrink-0" /></span>
           </div>
-          <div className="flex items-center justify-end gap-2.5 text-[15px] font-bold text-[#000000]">
-            <span>realtormedia.info@gmail.com</span>
-            <FaEnvelope className="text-black text-[15.5px] shrink-0" />
+          <div className="flex items-center justify-end gap-[16px] leading-[33px]">
+            <span>realtorsmedia.info@gmail.com</span>
+            <span className="w-[22px] flex justify-center"><FaEnvelope className="text-[21px] shrink-0" /></span>
           </div>
-          <div className="flex items-center justify-end gap-2.5 text-[15px] font-bold text-[#000000]">
-            <span>Archana arcade, IT Complex</span>
-            <FaMapMarkerAlt className="text-black text-[16.5px] shrink-0" />
+          <div className="flex items-center justify-end gap-[16px] leading-[25px]">
+            <span>Archana Arcade,</span>
+            <span className="w-[22px] flex justify-center"><FaMapMarkerAlt className="text-[22px] shrink-0" /></span>
           </div>
-          <div className="pr-[26px] text-[15px] font-bold text-[#000000]">
-            <span>South Bloch, 407</span>
+          <div className="pr-[38px] leading-[25px]">
+            <span>South Block, 407</span>
           </div>
         </div>
 
