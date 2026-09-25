@@ -401,6 +401,7 @@ export default function InvestorsPage() {
                     Our Senior Capital Syndication Officer will connect with you within 2 business hours with verified project brochures and yield audits.
                   </p>
                   <button
+                    type="button"
                     onClick={() => setFormSubmitted(false)}
                     className="mt-2 text-[11px] font-bold underline cursor-pointer"
                   >

@@ -125,17 +125,25 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
   const [scale, setScale] = useState<number>(1);
 
   useEffect(() => {
+    let rafId: number;
     const updateScale = () => {
-      if (containerRef.current) {
-        const w = containerRef.current.clientWidth;
-        if (w > 0) setScale(w / CANVAS_WIDTH);
-      }
+      cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (containerRef.current) {
+          const w = containerRef.current.clientWidth;
+          if (w > 0) {
+            const nextScale = w / CANVAS_WIDTH;
+            setScale((prev) => (Math.abs(prev - nextScale) > 0.002 ? nextScale : prev));
+          }
+        }
+      });
     };
     updateScale();
     const ro = new ResizeObserver(updateScale);
     if (containerRef.current) ro.observe(containerRef.current);
     window.addEventListener("resize", updateScale);
     return () => {
+      cancelAnimationFrame(rafId);
       ro.disconnect();
       window.removeEventListener("resize", updateScale);
     };

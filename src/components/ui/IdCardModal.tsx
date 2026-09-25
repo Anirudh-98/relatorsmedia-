@@ -949,7 +949,15 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
               </span>
             </div>
 
-            <form onSubmit={handleGenerateCard} className="space-y-3">
+            <form
+              onSubmit={handleGenerateCard}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") {
+                  e.preventDefault();
+                }
+              }}
+              className="space-y-3"
+            >
               {/* Full Name */}
               <div>
                 <label className="block text-[10.5px] font-black uppercase text-[#334155] mb-1">
@@ -959,7 +967,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                   type="text"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="Name"
                   className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                 />
@@ -975,7 +983,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     type="tel"
                     required
                     value={formData.mobile}
-                    onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, mobile: e.target.value }))}
                     placeholder="+91 00000 00000"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                   />
@@ -989,7 +997,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     type="email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                     placeholder="you@example.com"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                   />
@@ -1006,7 +1014,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     type="text"
                     required
                     value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
                     placeholder="Area or locality"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                   />
@@ -1019,7 +1027,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                   <input
                     type="text"
                     value={formData.agencyName}
-                    onChange={(e) => setFormData({ ...formData, agencyName: e.target.value })}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, agencyName: e.target.value }))}
                     placeholder="Agency or firm name (optional)"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                   />
@@ -1035,7 +1043,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                   <input
                     type="text"
                     value={formData.licenseNumber}
-                    onChange={(e) => setFormData({ ...formData, licenseNumber: e.target.value })}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, licenseNumber: e.target.value }))}
                     placeholder="RERA / License number (optional)"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-[#FAFBFD]"
                   />
@@ -1047,7 +1055,10 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                   </label>
                   <select
                     value={formData.experience}
-                    onChange={(e) => setFormData({ ...formData, experience: e.target.value })}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, experience: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") e.preventDefault();
+                    }}
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-[#FAFBFD] cursor-pointer"
                   >
                     <option value="">Select</option>
@@ -1067,7 +1078,10 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                 </label>
                 <select
                   value={formData.specialization}
-                  onChange={(e) => setFormData({ ...formData, specialization: e.target.value })}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, specialization: e.target.value }))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
                   className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-[#FAFBFD] cursor-pointer"
                 >
                   <option value="">Select</option>

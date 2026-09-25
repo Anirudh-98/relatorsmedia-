@@ -273,6 +273,7 @@ export default function HelpPage() {
                     Ticket #RM-{Math.floor(10000 + Math.random() * 90000)} has been generated. Our technical support executive will contact you shortly.
                   </p>
                   <button
+                    type="button"
                     onClick={() => setTicketSubmitted(false)}
                     className="mt-3 text-[11px] font-bold underline cursor-pointer text-[#073F73]"
                   >

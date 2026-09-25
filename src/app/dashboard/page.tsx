@@ -227,6 +227,7 @@ export default function DashboardPage() {
       action={
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={() => logout()}
             className="bg-gray-100 hover:bg-gray-200 text-[#143B5D] text-[11px] font-bold px-3 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
             title="Sign Out of Member Portal"
@@ -253,6 +254,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <button
+              type="button"
               onClick={() => setIsIdModalOpen(true)}
               className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-4 py-2.5 rounded-[3px] transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center gap-1.5 shrink-0"
             >
@@ -295,6 +297,7 @@ export default function DashboardPage() {
                   </div>
 
                   <button
+                    type="button"
                     onClick={() => setIsIdModalOpen(true)}
                     className="self-start sm:self-center bg-gray-100 hover:bg-gray-200 text-[#073F73] text-[11px] font-bold px-3 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
@@ -374,6 +377,7 @@ export default function DashboardPage() {
                     <span>Open Public Verification Page</span>
                   </Link>
                   <button
+                    type="button"
                     onClick={() => setIsIdModalOpen(true)}
                     className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-bold px-4 py-2 rounded-[3px] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
@@ -397,6 +401,7 @@ export default function DashboardPage() {
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setIsIdModalOpen(true)}
                 className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-6 py-3 rounded-[3px] transition-colors cursor-pointer shadow-md inline-flex items-center gap-2"
               >

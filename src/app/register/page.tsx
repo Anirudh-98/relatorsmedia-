@@ -489,7 +489,15 @@ export default function RegisterPage() {
             </div>
 
             {/* Step 3: Registration Form */}
-            <form onSubmit={handleRegister} className="space-y-3.5 text-[12px]">
+            <form
+              onSubmit={handleRegister}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") {
+                  e.preventDefault();
+                }
+              }}
+              className="space-y-3.5 text-[12px]"
+            >
               {errorMessage && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-[4px] text-[11.5px] text-red-700 flex items-start gap-2">
                   <FaExclamationTriangle className="text-red-500 mt-0.5 flex-shrink-0" />
