@@ -2,13 +2,13 @@
   <defs>
     <clipPath id="c"><rect width="153.15" height="242.81"/></clipPath>
     <linearGradient id="g" x1="-15.71" y1="12.91" x2="197.48" y2="12.91" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#064E3B"/>
-      <stop offset=".13" stop-color="#065F46"/>
-      <stop offset=".43" stop-color="#047857"/>
-      <stop offset=".5" stop-color="#059669"/>
-      <stop offset=".72" stop-color="#10B981"/>
-      <stop offset=".89" stop-color="#34D399"/>
-      <stop offset="1" stop-color="#6EE7B7"/>
+      <stop offset="0" stop-color="#043B2C"/>
+      <stop offset=".13" stop-color="#064E3B"/>
+      <stop offset=".43" stop-color="#065F46"/>
+      <stop offset=".5" stop-color="#047857"/>
+      <stop offset=".72" stop-color="#057A5A"/>
+      <stop offset=".89" stop-color="#058A63"/>
+      <stop offset="1" stop-color="#059669"/>
     </linearGradient>
     <linearGradient id="g2" x1="-63.3" y1="134.44" x2="187.49" y2="145.49" gradientUnits="userSpaceOnUse" xlink:href="#g"/>
   </defs>

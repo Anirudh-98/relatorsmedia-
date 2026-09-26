@@ -26,6 +26,7 @@ import {
 
 import { registerMember } from "@/lib/firebase/auth";
 import { peekNextEmployeeId } from "@/lib/firebase/db";
+import { getPasswordError, PASSWORD_HINT, PASSWORD_MAX_LENGTH } from "@/lib/validation/idCardSchemas";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -225,8 +226,9 @@ export default function RegisterPage() {
       return;
     }
 
-    if (formData.password.length < 6) {
-      setErrorMessage("Password must be at least 6 characters long.");
+    const passwordError = getPasswordError(formData.password);
+    if (passwordError) {
+      setErrorMessage(passwordError);
       return;
     }
 
@@ -259,7 +261,7 @@ export default function RegisterPage() {
       } else if (err.code === "auth/invalid-email") {
         msg = "The email address entered is invalid.";
       } else if (err.code === "auth/weak-password") {
-        msg = "The password is too weak. Please use at least 6 characters.";
+        msg = `The password is too weak. Please use ${PASSWORD_HINT}.`;
       } else if (err.message) {
         msg = err.message;
       }
@@ -656,7 +658,9 @@ export default function RegisterPage() {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="w-full px-2.5 py-1.5 border border-[#C9D7E3] rounded-[3px] focus:outline-none focus:border-[#073F73]"
-                    placeholder="Min. 8 characters"
+                    maxLength={PASSWORD_MAX_LENGTH}
+                    autoComplete="new-password"
+                    placeholder={PASSWORD_HINT}
                   />
                 </div>
                 <div>

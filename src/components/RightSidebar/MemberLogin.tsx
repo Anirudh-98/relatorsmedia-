@@ -232,13 +232,13 @@ export const MemberLogin: React.FC = () => {
           )}
         </button>
 
-        {/* Register Prompt */}
-        <div className="text-center text-[11px] sm:text-[11.5px] pt-1 text-[#143B5D]">
+        {/* Register Prompt — hidden for now; uncomment to show it again */}
+        {/* <div className="text-center text-[11px] sm:text-[11.5px] pt-1 text-[#143B5D]">
           <span>New Member? </span>
           <Link href="/register" className="font-black text-[#0B4F8A] hover:underline">
             Register Now
           </Link>
-        </div>
+        </div> */}
       </form>
     </div>
   );

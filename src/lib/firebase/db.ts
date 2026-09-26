@@ -13,8 +13,10 @@ import {
   serverTimestamp,
   Timestamp,
   runTransaction,
+  Firestore,
 } from "firebase/firestore";
 import { db } from "./config";
+import type { IssuedBy } from "./staff";
 
 export interface MemberProfileData {
   uid: string;
@@ -45,6 +47,7 @@ export interface MemberProfileData {
   status: "ACTIVE" | "PENDING" | "SUSPENDED";
   issuedDate: string;
   validTill: string;
+  issuedBy?: IssuedBy;
   createdAt?: Timestamp | any;
   updatedAt?: Timestamp | any;
 }
@@ -71,6 +74,8 @@ export interface IdCardRecordData {
   status: string;
   verificationUrl: string;
   uid?: string;
+  cardType?: "member" | "employee";
+  issuedBy?: IssuedBy;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -117,8 +122,14 @@ export interface LeadInquiryData {
 // Member Profiles (Firestore: `members/{uid}`)
 // ----------------------------------------------------
 
-export async function saveMemberProfile(uid: string, data: Partial<MemberProfileData>): Promise<void> {
-  const memberRef = doc(db, "members", uid);
+// Write helpers take an optional Firestore instance so an isolated session (see isolated.ts)
+// writes as its own signed-in user; they default to the main app.
+export async function saveMemberProfile(
+  uid: string,
+  data: Partial<MemberProfileData>,
+  firestore: Firestore = db
+): Promise<void> {
+  const memberRef = doc(firestore, "members", uid);
   await setDoc(
     memberRef,
     {
@@ -131,8 +142,12 @@ export async function saveMemberProfile(uid: string, data: Partial<MemberProfile
   );
 }
 
-export async function getMemberProfile(uid: string, email?: string | null): Promise<MemberProfileData | null> {
-  const memberRef = doc(db, "members", uid);
+export async function getMemberProfile(
+  uid: string,
+  email?: string | null,
+  firestore: Firestore = db
+): Promise<MemberProfileData | null> {
+  const memberRef = doc(firestore, "members", uid);
   const snap = await getDoc(memberRef);
   if (snap.exists()) {
     return snap.data() as MemberProfileData;
@@ -140,7 +155,7 @@ export async function getMemberProfile(uid: string, email?: string | null): Prom
 
   // Fallback 1: Query members collection where uid == uid
   try {
-    const qUid = query(collection(db, "members"), where("uid", "==", uid), limit(1));
+    const qUid = query(collection(firestore, "members"), where("uid", "==", uid), limit(1));
     const snapUid = await getDocs(qUid);
     if (!snapUid.empty) {
       return snapUid.docs[0].data() as MemberProfileData;
@@ -150,7 +165,7 @@ export async function getMemberProfile(uid: string, email?: string | null): Prom
   // Fallback 2: Query members collection by email
   if (email) {
     try {
-      const qEmail = query(collection(db, "members"), where("email", "==", email), limit(1));
+      const qEmail = query(collection(firestore, "members"), where("email", "==", email), limit(1));
       const snapEmail = await getDocs(qEmail);
       if (!snapEmail.empty) {
         return snapEmail.docs[0].data() as MemberProfileData;
@@ -161,7 +176,7 @@ export async function getMemberProfile(uid: string, email?: string | null): Prom
   // Fallback 3: Query idCards collection by email
   if (email) {
     try {
-      const qCard = query(collection(db, "idCards"), where("email", "==", email), limit(1));
+      const qCard = query(collection(firestore, "idCards"), where("email", "==", email), limit(1));
       const cardSnap = await getDocs(qCard);
       if (!cardSnap.empty) {
         const d = cardSnap.docs[0].data();
@@ -178,6 +193,14 @@ export async function getMemberProfile(uid: string, email?: string | null): Prom
   }
 
   return null;
+}
+
+/** Registered member with this email (emails may have been saved with different letter case). */
+export async function getMemberByEmail(email: string): Promise<MemberProfileData | null> {
+  const clean = email.trim();
+  const variants = Array.from(new Set([clean, clean.toLowerCase()]));
+  const snap = await getDocs(query(collection(db, "members"), where("email", "in", variants), limit(1)));
+  return snap.empty ? null : (snap.docs[0].data() as MemberProfileData);
 }
 
 export async function getMemberByEmployeeId(employeeId: string): Promise<MemberProfileData | null> {
@@ -207,9 +230,9 @@ export async function getMemberByEmployeeId(employeeId: string): Promise<MemberP
 // ID Cards Registry (Firestore: `idCards/{employeeId}`)
 // ----------------------------------------------------
 
-export async function saveIdCardRecord(cardData: IdCardRecordData): Promise<void> {
+export async function saveIdCardRecord(cardData: IdCardRecordData, firestore: Firestore = db): Promise<void> {
   const cleanId = cardData.employeeId.trim();
-  const cardRef = doc(db, "idCards", cleanId);
+  const cardRef = doc(firestore, "idCards", cleanId);
   await setDoc(
     cardRef,
     {
@@ -226,10 +249,14 @@ export async function saveIdCardRecord(cardData: IdCardRecordData): Promise<void
  * Marks a previously issued card as replaced so its QR code no longer verifies
  * (used when a member moves to a different tier and receives a new Member ID).
  */
-export async function retireIdCardRecord(employeeId: string, replacedBy: string): Promise<void> {
+export async function retireIdCardRecord(
+  employeeId: string,
+  replacedBy: string,
+  firestore: Firestore = db
+): Promise<void> {
   const cleanId = employeeId.trim();
   if (!cleanId || cleanId === replacedBy) return;
-  const cardRef = doc(db, "idCards", cleanId);
+  const cardRef = doc(firestore, "idCards", cleanId);
   const snap = await getDoc(cardRef);
   if (!snap.exists()) return;
   await updateDoc(cardRef, {
@@ -571,4 +598,67 @@ export async function peekNextEmployeeId(tier: "green" | "blue" | "orange" | "re
     console.warn("peekNextEmployeeId fallback:", err);
     return `${prefix}-1111`;
   }
+}
+
+// ----------------------------------------------------
+// Employee ID Cards (RM-E-1111, RM-E-1112...)
+// Staff IDs use their own counter so they never consume member sequence numbers
+// ----------------------------------------------------
+
+export const EMPLOYEE_ID_PREFIX = "RM-E";
+
+async function getHighestEmployeeSequence(): Promise<number> {
+  let highest = 1110;
+  const snap = await getDocs(query(collection(db, "idCards"), where("cardType", "==", "employee")));
+  snap.forEach((docSnap) => {
+    const match = docSnap.id.match(new RegExp(`^${EMPLOYEE_ID_PREFIX}-(\d+)$`, "i"));
+    if (match) highest = Math.max(highest, parseInt(match[1], 10));
+  });
+  return highest;
+}
+
+/** Previews the next employee ID without consuming it. */
+export async function peekNextEmployeeStaffId(): Promise<string> {
+  try {
+    let seq = (await getHighestEmployeeSequence()) + 1;
+    const counterSnap = await getDoc(doc(db, "counters", "employeeSequence"));
+    const stored = counterSnap.exists() ? counterSnap.data().currentSequence : 0;
+    if (typeof stored === "number" && stored >= seq) seq = stored + 1;
+    return `${EMPLOYEE_ID_PREFIX}-${seq}`;
+  } catch (err) {
+    console.warn("peekNextEmployeeStaffId fallback:", err);
+    return `${EMPLOYEE_ID_PREFIX}-1111`;
+  }
+}
+
+/** Atomically reserves the next employee ID. */
+export async function getNextEmployeeStaffId(): Promise<string> {
+  const counterRef = doc(db, "counters", "employeeSequence");
+  const highestInDb = await getHighestEmployeeSequence().catch(() => 1110);
+
+  let seq = await runTransaction(db, async (transaction) => {
+    const counterSnap = await transaction.get(counterRef);
+    const stored = counterSnap.exists() ? counterSnap.data().currentSequence : 0;
+    const next = Math.max(highestInDb, typeof stored === "number" ? stored : 0) + 1;
+    transaction.set(counterRef, { currentSequence: next, updatedAt: serverTimestamp() }, { merge: true });
+    return next;
+  });
+
+  // Skip any ID that was typed in manually and already exists
+  for (let attempts = 0; attempts < 50; attempts++) {
+    const existing = await getDoc(doc(db, "idCards", `${EMPLOYEE_ID_PREFIX}-${seq}`));
+    if (!existing.exists()) break;
+    seq++;
+  }
+  await setDoc(counterRef, { currentSequence: seq, updatedAt: serverTimestamp() }, { merge: true }).catch(() => {});
+
+  return `${EMPLOYEE_ID_PREFIX}-${seq}`;
+}
+
+/** All employee ID cards, newest ID first. */
+export async function getEmployeeIdCards(): Promise<IdCardRecordData[]> {
+  const snap = await getDocs(query(collection(db, "idCards"), where("cardType", "==", "employee")));
+  return snap.docs
+    .map((d) => d.data() as IdCardRecordData)
+    .sort((a, b) => b.employeeId.localeCompare(a.employeeId, undefined, { numeric: true }));
 }

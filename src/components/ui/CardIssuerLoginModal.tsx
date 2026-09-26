@@ -2,21 +2,21 @@
 
 import React, { useState } from "react";
 import { FaShieldAlt, FaLock, FaTimes, FaSpinner, FaExclamationTriangle, FaEye, FaEyeSlash } from "react-icons/fa";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase/config";
+import { CardIssuer, issuerLoginErrorMessage, signInCardIssuer } from "@/lib/firebase/staff";
 
-export interface AdminLoginModalProps {
+export interface CardIssuerLoginModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (issuer: CardIssuer) => void;
 }
 
-export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
+/** Sign-in for card issuer accounts (created by the admin in /admin) before opening the ID card generator. */
+export const CardIssuerLoginModal: React.FC<CardIssuerLoginModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
 }) => {
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -24,48 +24,22 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleAdminLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const loggedUser = userCredential.user;
-
-      // Verify that this user is the authorized admin
-      const authorizedAdmin = "admin@relatormedia.com";
-      if (loggedUser.email?.toLowerCase().trim() !== authorizedAdmin.toLowerCase()) {
-        // Sign them back out — wrong account
-        await signOut(auth);
-        setError(`Access Denied: Only the authorized administrator account can access this.`);
-        setLoading(false);
-        return;
-      }
-
-      // ✅ Immediately sign out so AuthContext does NOT redirect to dashboard.
-      // We only needed Firebase to verify the password — we don't want a persistent session.
-      await signOut(auth);
-
-      // Store a session-level flag so the parent knows admin is verified
-      sessionStorage.setItem("rm_admin_verified", "true");
+      // Signed in on an isolated, memory-only session: the browser's own login is never
+      // replaced by the issuer account and nothing is persisted.
+      const issuer = await signInCardIssuer(loginId, password);
 
       setPassword("");
       setError(null);
-      onSuccess();
-    } catch (err: any) {
-      console.error("Admin login error:", err);
-      let msg = "Invalid credentials. Please verify your email and password.";
-      if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password") {
-        msg = "Incorrect password. Please try again.";
-      } else if (err.code === "auth/user-not-found") {
-        msg = "Admin account not found in Firebase. Please check the email address.";
-      } else if (err.code === "auth/too-many-requests") {
-        msg = "Too many failed attempts. Please wait a moment and try again.";
-      } else if (err.message) {
-        msg = err.message;
-      }
-      setError(msg);
+      onSuccess(issuer);
+    } catch (err) {
+      console.error("Card issuer login error:", err);
+      setError(issuerLoginErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -87,10 +61,10 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
             </div>
             <div>
               <h3 className="text-sm font-black uppercase tracking-wide">
-                Admin Authorization Required
+                ID Card Issuer Login
               </h3>
               <p className="text-[11px] text-[#BAE6FD] font-medium leading-tight">
-                Verify credentials to access the ID card generator
+                Sign in with your issuer Login ID to generate ID cards
               </p>
             </div>
           </div>
@@ -105,12 +79,12 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
         </div>
 
         {/* Modal Body */}
-        <form onSubmit={handleAdminLogin} className="p-5 sm:p-6 space-y-4">
+        <form onSubmit={handleLogin} className="p-5 sm:p-6 space-y-4">
           <div className="p-3 bg-[#EEF6FC] border border-[#BFDBFE] rounded-lg text-[11.5px] text-[#073F73] leading-relaxed">
             <strong className="block font-black uppercase text-[10px] text-[#0369A1] tracking-wider mb-0.5">
               Restricted Console Access
             </strong>
-            Generating and configuring official Realtors Media ID cards requires administrator sign-in.
+            Official Realtors Media ID cards can only be generated with an issuer login provided by the administrator.
           </div>
 
           {error && (
@@ -123,21 +97,23 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
           <div className="space-y-3">
             <div>
               <label className="block text-[11px] font-black uppercase text-[#334155] mb-1">
-                Admin Email ID
+                Login ID
               </label>
               <input
-                type="email"
+                type="text"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter admin email"
+                autoComplete="username"
+                autoCapitalize="none"
+                value={loginId}
+                onChange={(e) => setLoginId(e.target.value)}
+                placeholder="Enter your issuer Login ID"
                 className="w-full px-3 py-2 text-xs font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#073F73] bg-[#FAFBFD]"
               />
             </div>
 
             <div>
               <label className="block text-[11px] font-black uppercase text-[#334155] mb-1">
-                Admin Password
+                Password
               </label>
               <div className="relative">
                 <input
@@ -145,7 +121,8 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter administrator password"
+                  autoComplete="current-password"
+                  placeholder="Enter your password"
                   className="w-full px-3 py-2 pr-9 text-xs font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#073F73] bg-[#FAFBFD]"
                 />
                 <button
@@ -169,12 +146,12 @@ export const AdminLoginModal: React.FC<AdminLoginModalProps> = ({
               {loading ? (
                 <>
                   <FaSpinner className="animate-spin text-xs" />
-                  <span>Verifying Admin Credentials...</span>
+                  <span>Verifying...</span>
                 </>
               ) : (
                 <>
                   <FaLock className="text-xs" />
-                  <span>Verify & Access ID Generator</span>
+                  <span>Sign In & Open ID Generator</span>
                 </>
               )}
             </button>

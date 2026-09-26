@@ -38,7 +38,7 @@ const CANVAS_HEIGHT = 1016;
 
 const THEME_CONFIGS = {
   orange: {
-    bgSvg: "/Id card.svg?v=3",
+    bgSvg: "/Id card.svg?v=4",
     stops: [
       { offset: "0%", color: "#973620" },
       { offset: "13%", color: "#bb4126" },
@@ -56,7 +56,7 @@ const THEME_CONFIGS = {
     badgeText: "VIP ELITE PARTNER",
   },
   red: {
-    bgSvg: "/Id card.svg?v=3",
+    bgSvg: "/Id card.svg?v=4",
     stops: [
       { offset: "0%", color: "#973620" },
       { offset: "13%", color: "#bb4126" },
@@ -74,7 +74,7 @@ const THEME_CONFIGS = {
     badgeText: "VIP ELITE PARTNER",
   },
   blue: {
-    bgSvg: "/Id card-blue.svg?v=3",
+    bgSvg: "/Id card-blue.svg?v=4",
     stops: [
       { offset: "0%", color: "#072B58" },
       { offset: "13%", color: "#0A3B75" },
@@ -92,7 +92,7 @@ const THEME_CONFIGS = {
     badgeText: "EXECUTIVE MEMBER",
   },
   green: {
-    bgSvg: "/Id card-green.svg?v=3",
+    bgSvg: "/Id card-green.svg?v=4",
     stops: [
       { offset: "0%", color: "#064E3B" },
       { offset: "13%", color: "#065F46" },
@@ -208,20 +208,31 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
       .replace("realtorsmedia.com", "www.realtorsmedia.world")
       .replace("https://realtorsmedia.world", "https://www.realtorsmedia.world");
 
-  const badgeText =
-    employee?.designation &&
+  const isEmployeeCard = employee?.cardType === "employee";
+
+  const badgeText = isEmployeeCard
+    ? "EMPLOYEE"
+    : employee?.designation &&
       ["VIP ELITE PARTNER", "EXECUTIVE MEMBER", "EXECUTIVE PARTNER", "VERIFIED REALTOR"].includes(
         employee.designation.toUpperCase()
       )
       ? employee.designation.toUpperCase()
       : T.badgeText;
 
-  const infoRows = [
-    { label: "FL ID", value: employee.employeeId || "RM-A-1116" },
-    { label: "SPECIALITY", value: employee.specialization || employee.department || "All Properties" },
-    { label: "LOCATION", value: employee.location || "Hyderabad" },
-    { label: "VALID TILL", value: employee.validTill || "31 Dec 2028" },
-  ];
+  // Employee cards swap the member fields for staff details; labels stay short to fit the label column
+  const infoRows = isEmployeeCard
+    ? [
+      { label: "EMP ID", value: employee.employeeId || "RM-E-1111" },
+      { label: "POSITION", value: employee.designation || "Executive" },
+      { label: "DEPT", value: employee.department || "Operations" },
+      { label: "ISSUED ON", value: employee.issuedDate || "01 JAN 2026" },
+    ]
+    : [
+      { label: "FL ID", value: employee.employeeId || "RM-A-1116" },
+      { label: "SPECIALITY", value: employee.specialization || employee.department || "All Properties" },
+      { label: "LOCATION", value: employee.location || "Hyderabad" },
+      { label: "VALID TILL", value: employee.validTill || "31 Dec 2028" },
+    ];
 
   return (
     <div
@@ -319,7 +330,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         {/* ══════════════════════════════════════════════════════════
             5. TIER TITLE — gradient badge with rounded corners
            ══════════════════════════════════════════════════════════ */}
-        <div className="absolute right-[27px] top-[232px] z-10 flex justify-end">
+        <div className="absolute right-[46px] top-[232px] z-10 flex justify-end">
           <div
             className="px-[16px] py-[6px] rounded-[10px] shadow-sm flex items-center justify-center"
             style={{ background: T.badgeBg }}
@@ -367,10 +378,10 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
             8. AUTHORIZED SIGNATURE — Koti Sir signature & line
            ══════════════════════════════════════════════════════════ */}
         <div className="absolute left-[50px] top-[700px] z-10 w-[278px] h-[140px]">
-          <div className="absolute left-[27px] top-[-7px] w-[197px] h-[118px]">
+          <div className="absolute left-[27px] top-[-18px] w-[197px] h-[118px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src="/images/KotiSirSignaturegreen.png"
+              src="/images/KotiSirSignature-card.png"
               alt="Authorized Signature"
               className="w-full h-full object-contain object-bottom select-none pointer-events-none"
             />

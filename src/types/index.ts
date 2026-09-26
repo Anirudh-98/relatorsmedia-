@@ -96,6 +96,7 @@ export interface RealtorsMediaEmployee {
   specialization?: string;
   experience?: string;
   licenseNumber?: string;
+  cardType?: "member" | "employee";
 }
 
 export interface QuickActionItem {

@@ -69,6 +69,7 @@ export default function VerifyPage() {
             licenseNumber: idCardDoc.licenseNumber || "",
             specialization: idCardDoc.specialization || "Residential Properties",
             experience: idCardDoc.experience || "",
+            cardType: idCardDoc.cardType === "employee" ? "employee" : "member",
           });
           setIsVerified(true);
           setIsLoading(false);
@@ -184,7 +185,7 @@ export default function VerifyPage() {
               <div className="md:col-span-7 space-y-4 text-[12px]">
                 <div>
                   <span className="text-[10px] bg-[#EEF6FC] text-[#073F73] font-black px-2 py-0.5 rounded-xs uppercase">
-                    {(employee.theme || "blue").toUpperCase()} TIER VERIFIED REALTOR
+                    {employee.cardType === "employee" ? "VERIFIED REALTORS MEDIA EMPLOYEE" : `${(employee.theme || "blue").toUpperCase()} TIER VERIFIED REALTOR`}
                   </span>
                   <h3 className="text-xl font-black text-[#073F73] mt-1">
                     {employee.name}
@@ -196,7 +197,7 @@ export default function VerifyPage() {
 
                 <div className="divide-y divide-gray-100 border border-gray-200 rounded-[4px] overflow-hidden bg-[#F8FAFC]">
                   <div className="p-2.5 flex justify-between">
-                    <span className="text-gray-500 font-bold">Member ID:</span>
+                    <span className="text-gray-500 font-bold">{employee.cardType === "employee" ? "Employee ID:" : "Member ID:"}</span>
                     <span className="font-black text-[#073F73]">{employee.employeeId}</span>
                   </div>
                   <div className="p-2.5 flex justify-between">
@@ -227,7 +228,7 @@ export default function VerifyPage() {
                   </div>
                   <div className="p-2.5 flex justify-between">
                     <span className="text-gray-500 font-bold">Validity Status:</span>
-                    <span className="font-bold text-emerald-700">✓ Active until {employee.validTill}</span>
+                    <span className="font-bold text-emerald-700">{employee.validTill ? `✓ Active until ${employee.validTill}` : "✓ Active"}</span>
                   </div>
                   <div className="p-2.5 flex justify-between">
                     <span className="text-gray-500 font-bold">Official Contact Phone:</span>

@@ -7,15 +7,15 @@ import {
   User,
   onAuthStateChanged,
   NextOrObserver,
-  Auth,
-  initializeAuth,
-  inMemoryPersistence,
 } from "firebase/auth";
-import { initializeApp, getApps } from "firebase/app";
-import { auth, firebaseConfig } from "./config";
+import { auth, db } from "./config";
+import { getIsolatedFirebase } from "./isolated";
+import type { IssuedBy } from "./staff";
 import {
   saveMemberProfile,
   getMemberProfile,
+  getMemberByEmail,
+  getMemberByEmployeeId,
   MemberProfileData,
   getNextEmployeeId,
   getPrefixForTier,
@@ -50,21 +50,8 @@ export interface RegisterMemberParams {
    * (used when an admin issues a card for someone else).
    */
   keepCurrentSession?: boolean;
-}
-
-let isolatedAuth: Auth | null = null;
-
-/**
- * A separate Firebase Auth instance with in-memory persistence. Creating a user on it
- * does not sign out (or replace) whoever is logged in on the main `auth` instance.
- */
-function getIsolatedAuth(): Auth {
-  if (!isolatedAuth) {
-    const appName = "member-registration";
-    const app = getApps().find((a) => a.name === appName) || initializeApp(firebaseConfig, appName);
-    isolatedAuth = initializeAuth(app, { persistence: inMemoryPersistence });
-  }
-  return isolatedAuth;
+  /** The card issuer who generated this card, recorded for the admin dashboard. */
+  issuedBy?: IssuedBy;
 }
 
 /**
@@ -73,7 +60,11 @@ function getIsolatedAuth(): Auth {
  */
 export async function registerMember(params: RegisterMemberParams): Promise<{ user: User; profile: MemberProfileData }> {
   // 1. Create Firebase Auth user or sign in if already exists
-  const targetAuth = params.keepCurrentSession ? getIsolatedAuth() : auth;
+  // keepCurrentSession: create and write as the new member on a memory-only session, so the
+  // browser's own login (or lack of one) is untouched and Firestore rules see the member's uid
+  const isolated = params.keepCurrentSession ? getIsolatedFirebase("member-registration") : null;
+  const targetAuth = isolated?.auth ?? auth;
+  const targetDb = isolated?.db ?? db;
   let user: User;
   let existingProfile: MemberProfileData | null = null;
   try {
@@ -84,7 +75,7 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
       try {
         const signInCredential = await signInWithEmailAndPassword(targetAuth, params.email, params.password);
         user = signInCredential.user;
-        existingProfile = await getMemberProfile(user.uid, user.email).catch(() => null);
+        existingProfile = await getMemberProfile(user.uid, user.email, targetDb).catch(() => null);
       } catch (signInErr: any) {
         throw new Error(
           "An account with this email already exists. Please enter your existing password to update your ID card, or sign in first."
@@ -201,10 +192,11 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     status: "ACTIVE",
     issuedDate,
     validTill,
+    ...(params.issuedBy ? { issuedBy: params.issuedBy } : {}),
   };
 
   // 6. Save in Firestore members and idCards collections
-  await saveMemberProfile(user.uid, profileData);
+  await saveMemberProfile(user.uid, profileData, targetDb);
   await saveIdCardRecord({
     employeeId: generatedEmpId,
     fullName: params.fullName,
@@ -227,11 +219,12 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
     status: "ACTIVE",
     verificationUrl: `https://www.realtorsmedia.world/verify/${generatedEmpId}`,
     uid: user.uid,
-  });
+    ...(params.issuedBy ? { issuedBy: params.issuedBy } : {}),
+  }, targetDb);
 
   // Moving to a different tier issues a new ID: the old card must stop verifying
   if (existingEmpId && !reuseExistingId) {
-    await retireIdCardRecord(existingEmpId, generatedEmpId).catch((err) =>
+    await retireIdCardRecord(existingEmpId, generatedEmpId, targetDb).catch((err) =>
       console.warn("Could not retire previous ID card:", err)
     );
   }
@@ -259,10 +252,22 @@ export async function logoutMember(): Promise<void> {
 }
 
 /**
- * Send password reset email via Firebase Auth
+ * Sends a password reset link to a registered member's email.
+ * `identifier` is the member's registered email or Member ID; it is looked up in the database
+ * first, and the link always goes to the email on record. Returns that email.
+ * Throws with code "app/member-not-found" if no registered member matches.
  */
-export async function resetMemberPassword(email: string): Promise<void> {
+export async function resetMemberPassword(identifier: string): Promise<string> {
+  const value = identifier.trim();
+  const member = value.includes("@") ? await getMemberByEmail(value) : await getMemberByEmployeeId(value);
+  const email = member?.email?.trim();
+  if (!email) {
+    throw Object.assign(new Error("No registered member was found with this email or Member ID."), {
+      code: "app/member-not-found",
+    });
+  }
   await sendPasswordResetEmail(auth, email);
+  return email;
 }
 
 /**

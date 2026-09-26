@@ -4,14 +4,14 @@ import React, { useState } from "react";
 import { FaIdCard, FaCheckCircle, FaStar, FaShieldAlt } from "react-icons/fa";
 import { RealtorsMediaIdCard } from "@/components/ui/RealtorsMediaIdCard";
 import { IdCardModal } from "@/components/ui/IdCardModal";
-import { AdminLoginModal } from "@/components/ui/AdminLoginModal";
+import { CardIssuerLoginModal } from "@/components/ui/CardIssuerLoginModal";
 import { realtorsEmployees } from "@/data/portalData";
 import { RealtorsMediaEmployee } from "@/types";
-import { useAuth } from "@/context/AuthContext";
+import { CardIssuer } from "@/lib/firebase/staff";
 
 export const UniqueIdCards: React.FC = () => {
-  const { user } = useAuth();
-  const isAdmin = user?.email?.toLowerCase().trim() === "admin@relatormedia.com";
+  // Issuer signed in on the memory-only session for this page view; cleared on reload
+  const [issuer, setIssuer] = useState<CardIssuer | null>(null);
 
   const [selectedTier, setSelectedTier] = useState<"green" | "blue" | "orange">("blue");
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
@@ -38,7 +38,7 @@ export const UniqueIdCards: React.FC = () => {
   const handleSelectCardTier = (tierTheme: "green" | "blue" | "orange") => {
     setSelectedTier(tierTheme);
     setSelectedEmployee(getEmpForTier(tierTheme));
-    if (isAdmin) {
+    if (issuer) {
       setIsModalOpen(true);
     } else {
       setIsAdminModalOpen(true);
@@ -46,7 +46,7 @@ export const UniqueIdCards: React.FC = () => {
   };
 
   const handleOpenGenerator = () => {
-    if (isAdmin) {
+    if (issuer) {
       setIsModalOpen(true);
     } else {
       setIsAdminModalOpen(true);
@@ -233,10 +233,11 @@ export const UniqueIdCards: React.FC = () => {
       </div>
 
       {/* Admin Login Verification Modal */}
-      <AdminLoginModal
+      <CardIssuerLoginModal
         isOpen={isAdminModalOpen}
         onClose={() => setIsAdminModalOpen(false)}
-        onSuccess={() => {
+        onSuccess={(signedIn) => {
+          setIssuer(signedIn);
           setIsAdminModalOpen(false);
           setIsModalOpen(true);
         }}
@@ -247,6 +248,7 @@ export const UniqueIdCards: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         initialTier={selectedTier}
+        issuer={issuer ?? undefined}
       />
     </div>
   );

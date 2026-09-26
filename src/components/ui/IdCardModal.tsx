@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { toPng } from "html-to-image";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -36,12 +35,23 @@ import {
   peekNextEmployeeId,
   saveMemberProfile,
   saveIdCardRecord,
-  getIdCardRecord,
   retireIdCardRecord,
   MemberProfileData,
 } from "@/lib/firebase/db";
 import { uploadMemberPhoto, compressImage, toFirestoreSafePhoto } from "@/lib/firebase/storage";
-import { getSafePhotoUrl, convertUrlToDataUrl } from "@/lib/utils/imageUtils";
+import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
+import { CardIssuer, toIssuedBy } from "@/lib/firebase/staff";
+import {
+  memberCardIssueSchema,
+  memberCardSelfSchema,
+  PASSWORD_HINT,
+  PASSWORD_MAX_LENGTH,
+  validateForm,
+} from "@/lib/validation/idCardSchemas";
+
+const FieldError: React.FC<{ message?: string }> = ({ message }) =>
+  message ? <p className="mt-1 text-[10.5px] font-bold text-red-600">{message}</p> : null;
+import { renderIdCardPng, printIdCardPng, downloadDataUrl } from "@/lib/utils/exportIdCard";
 
 export interface IdCardModalProps {
   isOpen: boolean;
@@ -55,6 +65,11 @@ export interface IdCardModalProps {
    * reads from or writes to the logged-in account (e.g. an admin generating cards).
    */
   mode?: "self" | "issue";
+  /**
+   * The signed-in card issuer generating a card for someone else: the new member's account is
+   * created without signing this browser in as that member, and the issuer is recorded on the card.
+   */
+  issuer?: CardIssuer;
 }
 
 const EXPERIENCE_OPTIONS = [
@@ -105,7 +120,9 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   initialTier = "green",
   onProfileUpdated,
   mode = "issue",
+  issuer,
 }) => {
+  const issuedByAdmin = !!issuer;
   const { user, memberProfile: authProfile, setMemberProfile, refreshProfile } = useAuth();
   const isSelfMode = mode === "self" && !!user;
   // In issue mode the generator starts blank: the logged-in account's card must never leak into it
@@ -168,6 +185,10 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   const [isPrinting, setIsPrinting] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
+  // Field errors are shown after the first submit attempt and then update as the user types
+  const [submitAttempted, setSubmitAttempted] = useState(false);
+  // The ID and photo last written to the database in this session
+  const [savedCard, setSavedCard] = useState<{ id: string; photo: string } | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
   // Live Camera state
@@ -213,6 +234,8 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     setSelectedTier(tier);
     setFormData(buildInitialForm());
     setIsGenerated(false);
+    setSavedCard(null);
+    setSubmitAttempted(false);
     setAuthError(null);
     setAuthSuccessMessage(null);
     setPhotoError(null);
@@ -441,24 +464,12 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     setAuthError(null);
     setAuthSuccessMessage(null);
 
-    if (!formData.photo) {
-      setPhotoError("⚠ Without a photo you will not get an ID card. Please take a photo or upload one from your gallery.");
+    const errors = validateForm(isSelfMode ? memberCardSelfSchema : memberCardIssueSchema, formData);
+    if (errors) {
+      setSubmitAttempted(true);
+      if (errors.photo) setPhotoError(errors.photo);
+      setAuthError("Please correct the highlighted fields and try again.");
       return;
-    }
-
-    if (!isSelfMode) {
-      if (!formData.password) {
-        setAuthError("Please enter Create Password to activate your member login.");
-        return;
-      }
-      if (formData.password.length < 6) {
-        setAuthError("Password must be at least 6 characters long.");
-        return;
-      }
-      if (formData.password !== formData.confirmPassword) {
-        setAuthError("Passwords do not match. Please re-enter your password.");
-        return;
-      }
     }
 
     setIsSubmitting(true);
@@ -473,7 +484,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       let savedProfile: MemberProfileData;
       let isUpdate = false;
 
-      const issuedForSomeoneElse = !isSelfMode && !!user;
+      const issuedForSomeoneElse = !isSelfMode && (!!user || issuedByAdmin);
 
       if (!isSelfMode || !user) {
         // registerMember creates the login, uploads the photo once authenticated, assigns the
@@ -500,6 +511,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           employeeId: formData.employeeId ? formData.employeeId.trim() : undefined,
           // An admin/member issuing a card for someone else must stay logged in as themselves
           keepCurrentSession: issuedForSomeoneElse,
+          issuedBy: issuer ? toIssuedBy(issuer) : undefined,
         });
         savedProfile = profile;
       } else {
@@ -615,6 +627,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       }
       onProfileUpdated?.(savedProfile);
       previewRequestRef.current++;
+      setSavedCard({ id: savedProfile.employeeId, photo: savedProfile.photoUrl || formData.photo });
       setFormData((prev) => ({
         ...prev,
         employeeId: savedProfile.employeeId,
@@ -640,7 +653,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       if (err.code === "auth/email-already-in-use") {
         msg = "This email is already registered. Please enter your existing password to update your ID card.";
       } else if (err.code === "auth/weak-password") {
-        msg = "Password should be at least 6 characters.";
+        msg = `Password must be ${PASSWORD_HINT}.`;
       } else if (err.code === "auth/invalid-email") {
         msg = "Please enter a valid email address.";
       } else if (err.message) {
@@ -654,10 +667,12 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
   // Only cards whose Member ID is actually registered can be exported — a previewed
   // (unsaved) ID would print a QR code that fails verification.
+  const savedProfilePhoto = memberProfile?.photoUrl || memberProfile?.photo || "";
   const canExportCard =
-    isGenerated ||
+    (!!savedCard && savedCard.id === formData.employeeId && savedCard.photo === formData.photo) ||
     (!!formData.employeeId &&
-      (formData.employeeId === memberProfile?.employeeId || formData.employeeId === initialEmployee?.employeeId));
+      ((formData.employeeId === memberProfile?.employeeId && formData.photo === savedProfilePhoto) ||
+        formData.employeeId === initialEmployee?.employeeId));
 
   const ensureExportable = () => {
     if (!formData.photo) {
@@ -665,14 +680,15 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       return false;
     }
     if (!canExportCard) {
-      setPhotoError('Please click "Update & Generate Verified ID Card" first — the Member ID is only valid once saved.');
+      setPhotoError('Please click "Update & Generate Verified ID Card" first — the card must be saved with its current Member ID and photo.');
       return false;
     }
     setPhotoError(null);
     return true;
   };
 
-  // High-Resolution CR80 PNG Download (Exact ID Card Print Size - No A4 margins)
+  // Exports render exactly the photo shown in the preview (the saved card's photo),
+  // never a photo looked up separately, so a stale or colliding record can't leak in.
   const handleDownloadPng = async () => {
     if (!ensureExportable()) return;
 
@@ -681,66 +697,14 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       const cardElement = document.getElementById("modal-realtors-id-card");
       if (!cardElement) throw new Error("ID card preview not found");
 
-      // 1. Authoritative Photo Resolution: Always pull the exact active member picture from database
-      let targetPhoto = formData.photo || (initialEmployee as any)?.photoUrl || initialEmployee?.photo;
-      if (formData.employeeId) {
-        try {
-          const dbCard = await getIdCardRecord(formData.employeeId);
-          if (dbCard && (dbCard.photoUrl || dbCard.photo)) {
-            targetPhoto = dbCard.photoUrl || dbCard.photo || targetPhoto;
-          }
-        } catch (dbErr) {
-          console.warn("Could not check idCards for fresh photo:", dbErr);
-        }
-      }
-
-      // 2. Pre-fetch and inline image as base64 Data URL to bypass html-to-image internal cache
-      if (targetPhoto && !targetPhoto.startsWith("data:")) {
-        try {
-          const inlinedDataUrl = await convertUrlToDataUrl(targetPhoto);
-          if (inlinedDataUrl) {
-            const photoImg =
-              cardElement.querySelector<HTMLImageElement>('img[data-profile-photo="true"]') ||
-              cardElement.querySelector<HTMLImageElement>('img[alt*="Photo"], img[alt*="Member"]');
-            if (photoImg) {
-              photoImg.src = inlinedDataUrl;
-              await photoImg.decode().catch(() => { });
-            }
-          }
-        } catch (convErr) {
-          console.warn("Could not inline photo data URL before export:", convErr);
-        }
-      }
-
-      const dataUrl = await toPng(cardElement, {
-        quality: 1,
-        pixelRatio: 3, // 300 DPI for crisp physical printing (1914 x 3048px)
-        width: 638,
-        height: 1016,
-        cacheBust: true,
-        includeQueryParams: true,
-        style: {
-          transform: "none",
-          transformOrigin: "top left",
-          position: "relative",
-          left: "0",
-          top: "0",
-          borderRadius: "36px",
-          clipPath: "inset(0 round 36px)",
-          boxShadow: "none",
-        },
-      });
-
-      const link = document.createElement("a");
-      link.download = `realtors_media_id_${formData.employeeId}.png`;
-      link.href = dataUrl;
-      link.click();
+      const dataUrl = await renderIdCardPng(cardElement, formData.photo);
+      downloadDataUrl(dataUrl, `realtors_media_id_${formData.employeeId}.png`);
 
       setDownloadSuccess(true);
       setTimeout(() => setDownloadSuccess(false), 3000);
     } catch (err) {
       console.error("Error generating ID card image:", err);
-      alert("Failed to export ID Card. Please try again.");
+      setPhotoError("Failed to export ID Card. Please try again.");
     } finally {
       setIsDownloading(false);
     }
@@ -752,152 +716,21 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     try {
       setIsPrinting(true);
       const cardElement = document.getElementById("modal-realtors-id-card");
-      if (!cardElement) {
-        window.print();
-        return;
-      }
+      if (!cardElement) throw new Error("ID card preview not found");
 
-      // 1. Authoritative Photo Resolution: Always pull the exact active member picture from database
-      let targetPhoto = formData.photo || (initialEmployee as any)?.photoUrl || initialEmployee?.photo;
-      if (formData.employeeId) {
-        try {
-          const dbCard = await getIdCardRecord(formData.employeeId);
-          if (dbCard && (dbCard.photoUrl || dbCard.photo)) {
-            targetPhoto = dbCard.photoUrl || dbCard.photo || targetPhoto;
-          }
-        } catch (dbErr) {
-          console.warn("Could not check idCards for fresh photo:", dbErr);
-        }
-      }
-
-      // 2. Pre-fetch and inline image as base64 Data URL to bypass html-to-image internal cache
-      if (targetPhoto && !targetPhoto.startsWith("data:")) {
-        try {
-          const inlinedDataUrl = await convertUrlToDataUrl(targetPhoto);
-          if (inlinedDataUrl) {
-            const photoImg =
-              cardElement.querySelector<HTMLImageElement>('img[data-profile-photo="true"]') ||
-              cardElement.querySelector<HTMLImageElement>('img[alt*="Photo"], img[alt*="Member"]');
-            if (photoImg) {
-              photoImg.src = inlinedDataUrl;
-              await photoImg.decode().catch(() => { });
-            }
-          }
-        } catch (convErr) {
-          console.warn("Could not inline photo data URL before export:", convErr);
-        }
-      }
-
-      const dataUrl = await toPng(cardElement, {
-        quality: 1,
-        pixelRatio: 3,
-        width: 638,
-        height: 1016,
-        cacheBust: true,
-        includeQueryParams: true,
-        style: {
-          transform: "none",
-          transformOrigin: "top left",
-          position: "relative",
-          left: "0",
-          top: "0",
-          borderRadius: "36px",
-          clipPath: "inset(0 round 36px)",
-          boxShadow: "none",
-        },
-      });
-
-      const printIframe = document.createElement("iframe");
-      printIframe.style.position = "fixed";
-      printIframe.style.right = "0";
-      printIframe.style.bottom = "0";
-      printIframe.style.width = "0";
-      printIframe.style.height = "0";
-      printIframe.style.border = "none";
-      document.body.appendChild(printIframe);
-
-      const iframeDoc = printIframe.contentWindow?.document;
-      if (!iframeDoc) {
-        printIframe.remove();
-        window.print();
-        return;
-      }
-
-      iframeDoc.open();
-      iframeDoc.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Print ID Card - ${formData.employeeId}</title>
-            <style>
-              @page {
-                size: 54mm 86mm;
-                margin: 0;
-              }
-              html, body {
-                margin: 0;
-                padding: 0;
-                width: 54mm;
-                height: 86mm;
-                background: #FFFFFF;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                overflow: hidden;
-              }
-              .print-container {
-                width: 54mm;
-                height: 86mm;
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                page-break-inside: avoid;
-                break-inside: avoid;
-                margin: 0;
-                padding: 0;
-              }
-              img {
-                width: 54mm;
-                height: 86mm;
-                aspect-ratio: 54 / 86;
-                display: block;
-                margin: 0;
-                border-radius: 3.5mm;
-                box-shadow: none;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="print-container">
-              <img src="${dataUrl}" alt="Realtors Media ID Card" />
-            </div>
-            <script>
-              window.onload = function() {
-                setTimeout(function() {
-                  window.focus();
-                  window.print();
-                  setTimeout(function() {
-                    try {
-                      window.parent.document.body.removeChild(window.frameElement);
-                    } catch(e) {}
-                  }, 1200);
-                }, 300);
-              };
-            </script>
-          </body>
-        </html>
-      `);
-      iframeDoc.close();
+      const dataUrl = await renderIdCardPng(cardElement, formData.photo);
+      printIdCardPng(dataUrl, `Print ID Card - ${formData.employeeId}`);
     } catch (err) {
       console.error("Print error:", err);
-      window.print();
+      setPhotoError("Failed to prepare the ID card for printing. Please try again.");
     } finally {
       setIsPrinting(false);
     }
   };
+
+  const fieldErrors = submitAttempted
+    ? validateForm(isSelfMode ? memberCardSelfSchema : memberCardIssueSchema, formData) ?? {}
+    : {};
 
   // Construct active employee object for live card render
   const previewEmployee: RealtorsMediaEmployee = {
@@ -1032,6 +865,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
             </div>
 
             <form
+              noValidate
               onSubmit={handleGenerateCard}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.target as HTMLElement).tagName !== "TEXTAREA") {
@@ -1053,6 +887,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                   placeholder="Name"
                   className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                 />
+                  <FieldError message={fieldErrors.name} />
               </div>
 
               {/* Mobile No. & Email ID */}
@@ -1069,6 +904,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     placeholder="+91 00000 00000"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                   />
+                  <FieldError message={fieldErrors.mobile} />
                 </div>
 
                 <div>
@@ -1083,6 +919,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     placeholder="you@example.com"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                   />
+                  <FieldError message={fieldErrors.email} />
                 </div>
               </div>
 
@@ -1100,6 +937,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     placeholder="Area or locality"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                   />
+                  <FieldError message={fieldErrors.location} />
                 </div>
 
                 <div>
@@ -1113,6 +951,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     placeholder="Agency or firm name (optional)"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                   />
+                  <FieldError message={fieldErrors.agencyName} />
                 </div>
               </div>
 
@@ -1129,6 +968,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     placeholder="RERA / License number (optional)"
                     className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] bg-[#FAFBFD]"
                   />
+                  <FieldError message={fieldErrors.licenseNumber} />
                 </div>
 
                 <div>
@@ -1188,7 +1028,9 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                         required
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        placeholder="Min. 6 characters"
+                        maxLength={PASSWORD_MAX_LENGTH}
+                        autoComplete="new-password"
+                        placeholder={PASSWORD_HINT}
                         className="w-full px-2.5 py-1.5 pr-8 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                       />
                       <button
@@ -1200,6 +1042,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                         {showPassword ? <FaEyeSlash /> : <FaEye />}
                       </button>
                     </div>
+                    <FieldError message={fieldErrors.password} />
                   </div>
 
                   <div>
@@ -1211,9 +1054,12 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                       required
                       value={formData.confirmPassword}
                       onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      maxLength={PASSWORD_MAX_LENGTH}
+                      autoComplete="new-password"
                       placeholder="Re-enter password"
                       className="w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]"
                     />
+                  <FieldError message={fieldErrors.confirmPassword} />
                   </div>
                 </div>
               )}
@@ -1341,6 +1187,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                     placeholder="e.g. RM-A-1116"
                     className="w-full px-2.5 py-1.5 text-[11.5px] font-mono font-bold text-[#073F73] bg-[#FAFBFD] border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent"
                   />
+                  <FieldError message={fieldErrors.employeeId} />
                 </div>
 
                 <div className="flex flex-col justify-end">
@@ -1404,7 +1251,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                       <span>Print (86x54mm)</span>
                     </button>
                     {/* The dashboard shows the signed-in account, not a card issued for someone else */}
-                    {(isSelfMode || !user) && (
+                    {(isSelfMode || !user) && !issuedByAdmin && (
                       <Link
                         href="/dashboard"
                         onClick={() => onClose()}

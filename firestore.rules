@@ -7,6 +7,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email == 'admin@realtorsmedia.com';
+    }
+
+    // Active ID card issuer login (created by the admin, see `staff`)
+    function isIssuer() {
+      let staffPath = /databases/$(database)/documents/staff/$(request.auth.uid);
+      return isAuthenticated() && exists(staffPath) && get(staffPath).data.active == true;
+    }
+
     // ========================================================
     // 1. MEMBERS COLLECTION (`members/{memberId}`)
     // Full CRUD operations for member accounts
@@ -33,11 +43,23 @@ service cloud.firestore {
       // READ: Public for QR code scanning & credential verification (/verify/[id])
       allow get, list: if true;
       
-      // CREATE & UPDATE: Authenticated member or system issuing/updating their card record
-      allow create, update: if isAuthenticated();
-      
-      // DELETE: Allow deleting card records if authenticated
-      allow delete: if isAuthenticated();
+      // CREATE: the admin, the issuer login (employee cards), or a member issuing their own card
+      allow create: if isAdmin()
+        || (isIssuer() && request.resource.data.cardType == 'employee')
+        || (isAuthenticated() && request.resource.data.uid == request.auth.uid);
+
+      // UPDATE: the admin, the issuer login (employee cards only), or the member who owns
+      // the card (ownership cannot be reassigned)
+      allow update: if isAdmin()
+        || (isIssuer() && resource.data.cardType == 'employee' && request.resource.data.cardType == 'employee')
+        || (
+          isAuthenticated() &&
+          resource.data.uid == request.auth.uid &&
+          request.resource.data.uid == request.auth.uid
+        );
+
+      // DELETE: admin only
+      allow delete: if isAdmin();
     }
 
     // ========================================================
@@ -87,6 +109,15 @@ service cloud.firestore {
       
       // DELETE: Administrative reset only
       allow delete: if isAuthenticated();
+    }
+
+    // ========================================================
+    // 6. ID CARD ISSUER LOGIN (`staff/{uid}`)
+    // Managed by the admin from /admin; the issuer can only read its own record
+    // ========================================================
+    match /staff/{uid} {
+      allow get: if isAdmin() || (isAuthenticated() && request.auth.uid == uid);
+      allow list, create, update, delete: if isAdmin();
     }
 
     // Default deny for all other collections
