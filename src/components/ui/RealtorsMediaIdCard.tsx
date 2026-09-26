@@ -38,7 +38,7 @@ const CANVAS_HEIGHT = 1016;
 
 const THEME_CONFIGS = {
   orange: {
-    bgSvg: "/Id card.svg?v=4",
+    bgSvg: "/Id card.svg?v=5",
     stops: [
       { offset: "0%", color: "#973620" },
       { offset: "13%", color: "#bb4126" },
@@ -56,7 +56,7 @@ const THEME_CONFIGS = {
     badgeText: "VIP ELITE PARTNER",
   },
   red: {
-    bgSvg: "/Id card.svg?v=4",
+    bgSvg: "/Id card.svg?v=5",
     stops: [
       { offset: "0%", color: "#973620" },
       { offset: "13%", color: "#bb4126" },
@@ -74,7 +74,7 @@ const THEME_CONFIGS = {
     badgeText: "VIP ELITE PARTNER",
   },
   blue: {
-    bgSvg: "/Id card-blue.svg?v=4",
+    bgSvg: "/Id card-blue.svg?v=5",
     stops: [
       { offset: "0%", color: "#072B58" },
       { offset: "13%", color: "#0A3B75" },
@@ -92,7 +92,7 @@ const THEME_CONFIGS = {
     badgeText: "EXECUTIVE MEMBER",
   },
   green: {
-    bgSvg: "/Id card-green.svg?v=4",
+    bgSvg: "/Id card-green.svg?v=5",
     stops: [
       { offset: "0%", color: "#064E3B" },
       { offset: "13%", color: "#065F46" },
@@ -378,7 +378,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
             8. AUTHORIZED SIGNATURE — Koti Sir signature & line
            ══════════════════════════════════════════════════════════ */}
         <div className="absolute left-[50px] top-[700px] z-10 w-[278px] h-[140px]">
-          <div className="absolute left-[27px] top-[-18px] w-[197px] h-[118px]">
+          <div className="absolute left-[27px] top-[-22px] w-[197px] h-[118px]">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/images/KotiSirSignature-card.png"
