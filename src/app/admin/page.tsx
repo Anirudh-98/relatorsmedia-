@@ -121,7 +121,7 @@ function AdminSignIn({ onSignedIn }: { onSignedIn: () => void }) {
   );
 }
 
-type Tab = "cards" | "members";
+type Tab = "memberCards" | "employeeCards" | "members";
 type DetailRecord = { title: string; photo?: string; data: Record<string, unknown> };
 
 function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
@@ -130,9 +130,8 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [issuers, setIssuers] = useState<StaffRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("cards");
+  const [tab, setTab] = useState<Tab>("memberCards");
   const [search, setSearch] = useState("");
-  const [cardTypeFilter, setCardTypeFilter] = useState<"all" | "member" | "employee">("all");
   const [detail, setDetail] = useState<DetailRecord | null>(null);
 
   const load = useCallback(async () => {
@@ -170,16 +169,16 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const q = search.trim().toLowerCase();
   const matches = (...values: (string | undefined)[]) => !q || values.some((v) => v?.toLowerCase().includes(q));
 
-  const filteredCards = cards.filter(
-    (c) =>
-      (cardTypeFilter === "all" || (c.cardType || "member") === cardTypeFilter) &&
-      matches(c.fullName, c.name, c.employeeId, c.phone, c.email, c.designation, c.department, c.location, c.issuedBy?.loginId)
-  );
+  const memberCards = cards.filter((c) => c.cardType !== "employee");
+  const employeeCards = cards.filter((c) => c.cardType === "employee");
+  const cardMatches = (c: IdCardRecordData) =>
+    matches(c.fullName, c.name, c.employeeId, c.phone, c.email, c.designation, c.department, c.location, c.issuedBy?.loginId);
+  const filteredMemberCards = memberCards.filter(cardMatches);
+  const filteredEmployeeCards = employeeCards.filter(cardMatches);
   const filteredMembers = members.filter((m) =>
     matches(m.fullName, m.name, m.employeeId, m.phone, m.email, m.location, m.city, m.agencyName)
   );
 
-  const employeeCount = cards.filter((c) => c.cardType === "employee").length;
   const activeIssuer = issuers.find((i) => i.active) || null;
 
   return (
@@ -222,8 +221,8 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile icon={<FaIdCard />} label="Total ID Cards" value={cards.length} loading={loading} />
-        <StatTile icon={<FaIdCard />} label="Member Cards" value={cards.length - employeeCount} loading={loading} />
-        <StatTile icon={<FaUserTie />} label="Employee Cards" value={employeeCount} loading={loading} />
+        <StatTile icon={<FaIdCard />} label="Member Cards" value={memberCards.length} loading={loading} />
+        <StatTile icon={<FaUserTie />} label="Employee Cards" value={employeeCards.length} loading={loading} />
         <StatTile icon={<FaUsers />} label="Registered Members" value={members.length} loading={loading} />
       </div>
 
@@ -232,26 +231,18 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       {/* Records */}
       <div className="bg-white rounded-xl border border-[#CBD5E1] shadow-xs overflow-hidden">
         <div className="px-3 sm:px-4 py-2.5 border-b border-[#E2E8F0] flex flex-col md:flex-row md:items-center justify-between gap-2">
-          <div className="flex gap-1.5">
-            <TabButton active={tab === "cards"} onClick={() => setTab("cards")}>
-              ID Cards ({cards.length})
+          <div className="flex flex-wrap gap-1.5">
+            <TabButton active={tab === "memberCards"} onClick={() => setTab("memberCards")}>
+              Member ID Cards ({memberCards.length})
+            </TabButton>
+            <TabButton active={tab === "employeeCards"} onClick={() => setTab("employeeCards")}>
+              Employee ID Cards ({employeeCards.length})
             </TabButton>
             <TabButton active={tab === "members"} onClick={() => setTab("members")}>
               Members ({members.length})
             </TabButton>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {tab === "cards" && (
-              <select
-                value={cardTypeFilter}
-                onChange={(e) => setCardTypeFilter(e.target.value as typeof cardTypeFilter)}
-                className="px-2 py-1.5 text-[11px] font-semibold border border-[#CBD5E1] rounded-md bg-[#F8FAFC] text-[#073F73] cursor-pointer"
-              >
-                <option value="all">All card types</option>
-                <option value="member">Member cards</option>
-                <option value="employee">Employee cards</option>
-              </select>
-            )}
             <div className="relative w-full sm:w-72">
               <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#94A3B8] text-[11px]" />
               <input
@@ -269,28 +260,48 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
           <div className="p-10 text-center text-[12px] text-[#64748B] font-bold flex items-center justify-center gap-2">
             <FaSpinner className="animate-spin" /> Loading...
           </div>
-        ) : tab === "cards" ? (
+        ) : tab === "memberCards" ? (
           <RecordTable
-            empty="No ID cards found."
-            headers={["", "Name", "ID", "Type", "Position / Tier", "Phone", "Email", "Issued", "Status", "Issued By"]}
-            rows={filteredCards.map((c) => ({
+            empty="No member ID cards found."
+            headers={["", "Name", "Member ID", "Tier", "Designation", "Phone", "Email", "Issued", "Valid Till", "Status", "Issued By"]}
+            rows={filteredMemberCards.map((c) => ({
               key: c.employeeId,
               photo: c.photoUrl || c.photo,
               cells: [
                 c.fullName || c.name || "—",
-                <Link key="id" href={`/verify/${c.employeeId}`} target="_blank" onClick={(e) => e.stopPropagation()} className="font-mono font-bold text-[#0284C7] hover:underline">
-                  {c.employeeId}
-                </Link>,
-                <TypeBadge key="type" type={c.cardType === "employee" ? "employee" : "member"} />,
-                c.designation || c.cardTier || "—",
+                <VerifyLink key="id" id={c.employeeId} />,
+                (c.cardTier || "—").toUpperCase(),
+                c.designation || "—",
                 c.phone || c.mobile || "—",
                 c.email || "—",
                 c.issuedDate || "—",
+                c.validTill || "—",
                 <StatusBadge key="status" status={c.status} />,
-                c.issuedBy ? `${c.issuedBy.loginId}` : "—",
+                c.issuedBy?.loginId || "—",
               ],
-              onClick: () =>
-                setDetail({ title: `${c.fullName || c.name} — ${c.employeeId}`, photo: c.photoUrl || c.photo, data: c as unknown as Record<string, unknown> }),
+              onClick: () => setDetail(cardDetail(c)),
+            }))}
+          />
+        ) : tab === "employeeCards" ? (
+          <RecordTable
+            empty="No employee ID cards found."
+            headers={["", "Name", "Employee ID", "Position", "Department", "Phone", "Email", "Branch", "Issued", "Status", "Issued By"]}
+            rows={filteredEmployeeCards.map((c) => ({
+              key: c.employeeId,
+              photo: c.photoUrl || c.photo,
+              cells: [
+                c.fullName || c.name || "—",
+                <VerifyLink key="id" id={c.employeeId} />,
+                c.designation || "—",
+                c.department || "—",
+                c.phone || c.mobile || "—",
+                c.email || "—",
+                c.location || "—",
+                c.issuedDate || "—",
+                <StatusBadge key="status" status={c.status} />,
+                c.issuedBy?.loginId || "—",
+              ],
+              onClick: () => setDetail(cardDetail(c)),
             }))}
           />
         ) : (
@@ -302,11 +313,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
               photo: m.photoUrl || m.photo,
               cells: [
                 m.fullName || m.name || "—",
-                m.employeeId ? (
-                  <Link key="id" href={`/verify/${m.employeeId}`} target="_blank" onClick={(e) => e.stopPropagation()} className="font-mono font-bold text-[#0284C7] hover:underline">
-                    {m.employeeId}
-                  </Link>
-                ) : "—",
+                m.employeeId ? <VerifyLink key="id" id={m.employeeId} /> : "—",
                 m.phone || m.mobile || "—",
                 m.email || "—",
                 m.location || [m.city, m.state].filter(Boolean).join(", ") || "—",
@@ -516,15 +523,19 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
   );
 }
 
-function TypeBadge({ type }: { type: "member" | "employee" }) {
+function VerifyLink({ id }: { id: string }) {
   return (
-    <span
-      className={`text-[9.5px] font-black uppercase px-2 py-0.5 rounded-full ${type === "employee" ? "bg-[#EDE9FE] text-[#5B21B6]" : "bg-[#E0F2FE] text-[#0369A1]"}`}
-    >
-      {type}
-    </span>
+    <Link href={`/verify/${id}`} target="_blank" onClick={(e) => e.stopPropagation()} className="font-mono font-bold text-[#0284C7] hover:underline">
+      {id}
+    </Link>
   );
 }
+
+const cardDetail = (c: IdCardRecordData): DetailRecord => ({
+  title: `${c.fullName || c.name} — ${c.employeeId}`,
+  photo: c.photoUrl || c.photo,
+  data: c as unknown as Record<string, unknown>,
+});
 
 function StatusBadge({ status }: { status?: string }) {
   const s = (status || "ACTIVE").toUpperCase();
