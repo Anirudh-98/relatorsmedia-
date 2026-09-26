@@ -187,6 +187,8 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
   const [isGenerated, setIsGenerated] = useState(false);
   // Field errors are shown after the first submit attempt and then update as the user types
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  // Payment QR shown after the form validates; the card is saved only when "Done" is clicked
+  const [showPaymentQr, setShowPaymentQr] = useState(false);
   // The ID and photo last written to the database in this session
   const [savedCard, setSavedCard] = useState<{ id: string; photo: string } | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -236,6 +238,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     setIsGenerated(false);
     setSavedCard(null);
     setSubmitAttempted(false);
+    setShowPaymentQr(false);
     setAuthError(null);
     setAuthSuccessMessage(null);
     setPhotoError(null);
@@ -274,6 +277,8 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       if (e.key === "Escape" && isOpen) {
         if (isCameraActive) {
           stopCamera();
+        } else if (showPaymentQr) {
+          setShowPaymentQr(false);
         } else {
           onClose();
         }
@@ -281,7 +286,7 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, isCameraActive, onClose]);
+  }, [isOpen, isCameraActive, showPaymentQr, onClose]);
 
   // Attach camera stream when camera view is active
   useEffect(() => {
@@ -472,6 +477,13 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       return;
     }
 
+    // Payment comes first: the details are saved only after "Done" on the payment QR
+    setShowPaymentQr(true);
+  };
+
+  // Saves the member card to the database (called from "Done" on the payment QR)
+  const saveCard = async () => {
+    setShowPaymentQr(false);
     setIsSubmitting(true);
 
     try {
@@ -1353,6 +1365,59 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* ========================================================
+          PAYMENT QR — shown before every member card is saved
+         ======================================================== */}
+      {showPaymentQr && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-xs p-3"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowPaymentQr(false);
+          }}
+        >
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-xs sm:max-w-sm overflow-hidden border border-slate-300 flex flex-col max-h-[94vh]">
+            <div className="bg-[#073F73] text-white px-4 py-3 flex items-center justify-between">
+              <span className="text-[13px] font-black uppercase tracking-wide flex items-center gap-2">
+                <FaQrcode className="text-[#38BDF8]" />
+                <span>Scan & Pay</span>
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowPaymentQr(false)}
+                aria-label="Close payment"
+                className="w-7 h-7 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <FaTimes className="text-[12px]" />
+              </button>
+            </div>
+
+            <div className="p-4 flex flex-col items-center gap-3 overflow-y-auto">
+              <div className="w-full flex items-center justify-between text-[11.5px] font-bold text-[#334155] bg-[#F8FAFC] border border-[#E2E8F0] rounded-md px-3 py-2">
+                <span>{activePlan.title}</span>
+                <span className="text-[#073F73] font-black">{activePlan.price}</span>
+              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/images/QRCODE.jpeg"
+                alt="UPI payment QR code — UPI ID tsinfomedia@oksbi"
+                className="w-full max-w-[260px] h-auto rounded-lg border border-[#E2E8F0]"
+              />
+              <p className="text-[11px] text-[#475569] font-medium text-center leading-snug">
+                Scan with any UPI app to pay, then click <strong>Done</strong> to save the ID card details.
+              </p>
+              <button
+                type="button"
+                onClick={saveCard}
+                className="w-full py-2.5 rounded-md bg-[#059669] hover:bg-[#047857] text-white text-[13px] font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-colors cursor-pointer"
+              >
+                <FaCheck className="text-[12px]" />
+                <span>Done</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ========================================================
           LIVE CAMERA CAPTURE OVERLAY WITH FRONT & BACK SWITCH
