@@ -1,7 +1,7 @@
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "firebase/auth";
 import { collection, doc, Firestore, getDoc, getDocs, serverTimestamp, setDoc, updateDoc } from "firebase/firestore";
 import { ADMIN_EMAIL, getIsolatedFirebase } from "./isolated";
-import type { IdCardRecordData, MemberProfileData } from "./db";
+import type { IdCardRecordData } from "./db";
 import { getPasswordError } from "../validation/idCardSchemas";
 
 // Issuer login IDs are mapped to Firebase Auth emails on this domain (never shown to users)
@@ -152,11 +152,4 @@ export async function listAllIdCards(firestore: Firestore): Promise<IdCardRecord
   return snap.docs
     .map((d) => ({ ...(d.data() as IdCardRecordData), employeeId: (d.data().employeeId as string) || d.id }))
     .sort((a, b) => b.employeeId.localeCompare(a.employeeId, undefined, { numeric: true }));
-}
-
-export async function listAllMembers(firestore: Firestore): Promise<MemberProfileData[]> {
-  const snap = await getDocs(collection(firestore, "members"));
-  return snap.docs
-    .map((d) => ({ ...(d.data() as MemberProfileData), uid: (d.data().uid as string) || d.id }))
-    .sort((a, b) => (a.fullName || "").localeCompare(b.fullName || ""));
 }

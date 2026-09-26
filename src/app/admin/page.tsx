@@ -12,7 +12,6 @@ import {
   FaSpinner,
   FaSyncAlt,
   FaTimes,
-  FaUsers,
   FaUserShield,
   FaUserTie,
 } from "react-icons/fa";
@@ -21,12 +20,11 @@ import { getAdminFirebase, signInAdmin, signOutAdmin } from "@/lib/firebase/isol
 import {
   createIssuerAccount,
   listAllIdCards,
-  listAllMembers,
   listIssuers,
   setIssuerActive,
   StaffRecord,
 } from "@/lib/firebase/staff";
-import { IdCardRecordData, MemberProfileData } from "@/lib/firebase/db";
+import { IdCardRecordData } from "@/lib/firebase/db";
 import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
 import { PASSWORD_HINT, PASSWORD_MAX_LENGTH } from "@/lib/validation/idCardSchemas";
 
@@ -43,7 +41,7 @@ export default function AdminDashboardPage() {
   return (
     <PortalLayout
       title="Admin Dashboard"
-      subtitle="All generated ID cards, member details, and the ID card issuer login"
+      subtitle="All generated member and employee ID cards, and the ID card issuer login"
       badge="Administrator"
       breadcrumbs={[{ label: "Admin Dashboard" }]}
     >
@@ -121,12 +119,11 @@ function AdminSignIn({ onSignedIn }: { onSignedIn: () => void }) {
   );
 }
 
-type Tab = "memberCards" | "employeeCards" | "members";
+type Tab = "memberCards" | "employeeCards";
 type DetailRecord = { title: string; photo?: string; data: Record<string, unknown> };
 
 function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [cards, setCards] = useState<IdCardRecordData[]>([]);
-  const [members, setMembers] = useState<MemberProfileData[]>([]);
   const [issuers, setIssuers] = useState<StaffRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -137,9 +134,8 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const load = useCallback(async () => {
     const { db } = getAdminFirebase();
     try {
-      const [c, m, i] = await Promise.all([listAllIdCards(db), listAllMembers(db), listIssuers(db)]);
+      const [c, i] = await Promise.all([listAllIdCards(db), listIssuers(db)]);
       setCards(c);
-      setMembers(m);
       setIssuers(i);
       setLoadError(null);
     } catch (err) {
@@ -153,10 +149,9 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => {
     // Initial load; state is only set from the async callback
     const { db } = getAdminFirebase();
-    Promise.all([listAllIdCards(db), listAllMembers(db), listIssuers(db)])
-      .then(([c, m, i]) => {
+    Promise.all([listAllIdCards(db), listIssuers(db)])
+      .then(([c, i]) => {
         setCards(c);
-        setMembers(m);
         setIssuers(i);
       })
       .catch((err) => {
@@ -175,9 +170,6 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
     matches(c.fullName, c.name, c.employeeId, c.phone, c.email, c.designation, c.department, c.location, c.issuedBy?.loginId);
   const filteredMemberCards = memberCards.filter(cardMatches);
   const filteredEmployeeCards = employeeCards.filter(cardMatches);
-  const filteredMembers = members.filter((m) =>
-    matches(m.fullName, m.name, m.employeeId, m.phone, m.email, m.location, m.city, m.agencyName)
-  );
 
   const activeIssuer = issuers.find((i) => i.active) || null;
 
@@ -219,11 +211,10 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <StatTile icon={<FaIdCard />} label="Total ID Cards" value={cards.length} loading={loading} />
         <StatTile icon={<FaIdCard />} label="Member Cards" value={memberCards.length} loading={loading} />
         <StatTile icon={<FaUserTie />} label="Employee Cards" value={employeeCards.length} loading={loading} />
-        <StatTile icon={<FaUsers />} label="Registered Members" value={members.length} loading={loading} />
       </div>
 
       <IssuerLoginPanel activeIssuer={activeIssuer} loading={loading} onChanged={load} />
@@ -237,9 +228,6 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
             </TabButton>
             <TabButton active={tab === "employeeCards"} onClick={() => setTab("employeeCards")}>
               Employee ID Cards ({employeeCards.length})
-            </TabButton>
-            <TabButton active={tab === "members"} onClick={() => setTab("members")}>
-              Members ({members.length})
             </TabButton>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -282,7 +270,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
               onClick: () => setDetail(cardDetail(c)),
             }))}
           />
-        ) : tab === "employeeCards" ? (
+        ) : (
           <RecordTable
             empty="No employee ID cards found."
             headers={["", "Name", "Employee ID", "Position", "Department", "Phone", "Email", "Branch", "Issued", "Status", "Issued By"]}
@@ -302,27 +290,6 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
                 c.issuedBy?.loginId || "—",
               ],
               onClick: () => setDetail(cardDetail(c)),
-            }))}
-          />
-        ) : (
-          <RecordTable
-            empty="No members found."
-            headers={["", "Name", "Member ID", "Phone", "Email", "Location", "Tier", "Agency", "Status"]}
-            rows={filteredMembers.map((m) => ({
-              key: m.uid,
-              photo: m.photoUrl || m.photo,
-              cells: [
-                m.fullName || m.name || "—",
-                m.employeeId ? <VerifyLink key="id" id={m.employeeId} /> : "—",
-                m.phone || m.mobile || "—",
-                m.email || "—",
-                m.location || [m.city, m.state].filter(Boolean).join(", ") || "—",
-                (m.selectedTier || m.tier || "—").toString().toUpperCase(),
-                m.agencyName || m.companyName || "—",
-                <StatusBadge key="status" status={m.status} />,
-              ],
-              onClick: () =>
-                setDetail({ title: m.fullName || m.name || m.email, photo: m.photoUrl || m.photo, data: m as unknown as Record<string, unknown> }),
             }))}
           />
         )}
