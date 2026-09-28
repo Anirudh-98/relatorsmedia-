@@ -457,7 +457,7 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
             <span className="w-[22px] flex justify-center"><FaEnvelope className="text-[21px] shrink-0" /></span>
           </div>
           <div className="flex items-center justify-end gap-[16px] leading-[25px]">
-            <span>Archana Arcade,</span>
+            <span>Archana Arcade IT Complex,</span>
             <span className="w-[22px] flex justify-center"><FaMapMarkerAlt className="text-[22px] shrink-0" /></span>
           </div>
           <div className="pr-[38px] leading-[25px]">

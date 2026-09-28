@@ -33,3 +33,14 @@ export const PUBLIC_ROUTES: { path: string; priority: number; changeFrequency: "
   { path: "/privacy-policy", priority: 0.3, changeFrequency: "yearly" },
   { path: "/terms", priority: 0.3, changeFrequency: "yearly" },
 ];
+
+/** Official contact details, as printed on the ID card footer. */
+export const CONTACT = {
+  website: "www.realtorsmedia.world",
+  phones: ["+91 8096792778", "+91 9441185799"],
+  email: "realtorsmedia.info@gmail.com",
+  addressLines: ["Archana Arcade IT Complex,", "South Block, 407"],
+};
+
+/** `tel:` link for a phone number written with spaces. */
+export const telHref = (phone: string) => `tel:${phone.replace(/\s+/g, "")}`;

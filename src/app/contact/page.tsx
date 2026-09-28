@@ -2,48 +2,10 @@
 
 import React, { useState } from "react";
 import { PortalLayout } from "@/components/layout/PortalLayout";
-import { FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaClock, FaCheckCircle, FaWhatsapp } from "react-icons/fa";
+import { FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaClock, FaCheckCircle, FaWhatsapp, FaGlobe } from "react-icons/fa";
 import { FormError } from "@/components/ui/FormError";
 import { firstFormError, contactSchema } from "@/lib/validation/formSchemas";
-
-interface OfficeLocation {
-  city: string;
-  type: string;
-  address: string;
-  phone: string;
-  email: string;
-}
-
-const offices: OfficeLocation[] = [
-  {
-    city: "Pune (HQ)",
-    type: "Corporate Headquarters",
-    address: "Level 4, Business Bay, Senapati Bapat Road, Shivajinagar, Pune, Maharashtra - 411016",
-    phone: "+91 20 4567 8900 / +91 97654 32109",
-    email: "pune@realtorsmedia.world",
-  },
-  {
-    city: "Hyderabad",
-    type: "Regional Media & Operations Hub",
-    address: "Plot 12, Financial District, Gachibowli, Hyderabad, Telangana - 500032",
-    phone: "+91 40 6789 1234 / +91 99887 76655",
-    email: "hyderabad@realtorsmedia.world",
-  },
-  {
-    city: "Mumbai",
-    type: "Commercial Liaison & Legal Cell",
-    address: "Tower 2, Platina Business Park, BKC, Bandra East, Mumbai, Maharashtra - 400051",
-    phone: "+91 22 2890 5678 / +91 98201 99887",
-    email: "mumbai@realtorsmedia.world",
-  },
-  {
-    city: "Bengaluru",
-    type: "Southern Zonal Office",
-    address: "Brigade Gateway Campus, Malleshwaram West, Bengaluru, Karnataka - 560055",
-    phone: "+91 80 4123 4567 / +91 97400 44556",
-    email: "bengaluru@realtorsmedia.world",
-  },
-];
+import { CONTACT, SITE_URL, telHref } from "@/lib/site";
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -67,7 +29,7 @@ export default function ContactPage() {
   return (
     <PortalLayout
       title="Contact Realtors Media"
-      subtitle="Reach Our Headquarters, Regional Broadcast Studios, Member Welfare Cells and Customer Support"
+      subtitle="Call, email or visit the Realtors Media office"
       badge="Get In Touch"
     >
       <div className="space-y-6">
@@ -198,16 +160,44 @@ export default function ContactPage() {
                 <div className="flex items-start gap-2.5">
                   <FaPhoneAlt className="text-[#38BDF8] text-[13px] mt-0.5" />
                   <div>
-                    <span className="font-bold block">Toll-Free Helpline:</span>
-                    <span className="text-[#BAE6FD]">1800 234 5678 (Toll Free)</span>
+                    <span className="font-bold block">Phone:</span>
+                    {CONTACT.phones.map((phone) => (
+                      <a key={phone} href={telHref(phone)} className="text-[#BAE6FD] hover:text-white block">
+                        {phone}
+                      </a>
+                    ))}
                   </div>
                 </div>
 
                 <div className="flex items-start gap-2.5">
                   <FaEnvelope className="text-[#38BDF8] text-[13px] mt-0.5" />
                   <div>
-                    <span className="font-bold block">Central Support Email:</span>
-                    <span className="text-[#BAE6FD]">support@realtorsmedia.world</span>
+                    <span className="font-bold block">Email:</span>
+                    <a href={`mailto:${CONTACT.email}`} className="text-[#BAE6FD] hover:text-white break-all">
+                      {CONTACT.email}
+                    </a>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <FaGlobe className="text-[#38BDF8] text-[13px] mt-0.5" />
+                  <div>
+                    <span className="font-bold block">Website:</span>
+                    <a href={SITE_URL} className="text-[#BAE6FD] hover:text-white">
+                      {CONTACT.website}
+                    </a>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5">
+                  <FaMapMarkerAlt className="text-[#38BDF8] text-[13px] mt-0.5" />
+                  <div>
+                    <span className="font-bold block">Office Address:</span>
+                    {CONTACT.addressLines.map((line) => (
+                      <span key={line} className="text-[#BAE6FD] block">
+                        {line}
+                      </span>
+                    ))}
                   </div>
                 </div>
 
@@ -222,7 +212,7 @@ export default function ContactPage() {
 
               <div className="mt-4 pt-3 border-t border-white/20">
                 <a
-                  href="https://wa.me/919765432109"
+                  href={`https://wa.me/${CONTACT.phones[0].replace(/\D/g, "")}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="bg-[#25D366] hover:bg-[#20ba59] text-white font-extrabold text-[11.5px] py-2 px-3 rounded-md flex items-center justify-center gap-1.5 transition-colors shadow-xs"
@@ -238,44 +228,52 @@ export default function ContactPage() {
                 Media & Broadcast Studio
               </h4>
               <p className="text-[11.5px] text-[#475569] leading-relaxed">
-                For studio interview bookings, live project showcases, or press releases, email our editorial desk at <strong className="text-[#073F73]">press@realtorsmedia.world</strong>.
+                For studio interview bookings, live project showcases, or press releases, email us at{" "}
+                <a href={`mailto:${CONTACT.email}`} className="font-bold text-[#073F73] hover:underline break-all">
+                  {CONTACT.email}
+                </a>{" "}
+                or call{" "}
+                <a href={telHref(CONTACT.phones[0])} className="font-bold text-[#073F73] hover:underline">
+                  {CONTACT.phones[0]}
+                </a>
+                .
               </p>
             </div>
           </div>
         </div>
 
-        {/* 4 Regional Offices Grid */}
-        <div>
-          <h3 className="text-[16px] font-black text-[#073F73] mb-3 uppercase tracking-tight">
-            Our Regional Presence
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {offices.map((office, idx) => (
-              <div
-                key={idx}
-                className="bg-white border border-[#CBD5E1] rounded-xl p-4 shadow-2xs flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <FaMapMarkerAlt className="text-[#E21F2F] text-[14px]" />
-                    <h4 className="text-[14px] font-black text-[#073F73]">
-                      {office.city}
-                    </h4>
-                  </div>
-                  <div className="text-[10.5px] font-bold text-[#0B4F8A] bg-[#EEF6FC] px-2 py-0.5 rounded-full inline-block mb-2">
-                    {office.type}
-                  </div>
-                  <p className="text-[11.5px] text-[#475569] leading-relaxed mb-3">
-                    {office.address}
-                  </p>
-                </div>
-
-                <div className="border-t border-gray-100 pt-2 text-[11px] font-semibold text-[#1E293B] space-y-0.5">
-                  <div className="truncate">{office.phone}</div>
-                  <div className="text-[#0B4F8A] truncate">{office.email}</div>
-                </div>
-              </div>
-            ))}
+        {/* Office */}
+        <div className="bg-white border border-[#CBD5E1] rounded-xl p-5 shadow-2xs">
+          <div className="flex items-center gap-2 mb-2">
+            <FaMapMarkerAlt className="text-[#E21F2F] text-[16px]" />
+            <h3 className="text-[16px] font-black text-[#073F73] uppercase tracking-tight">Our Office</h3>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-[12px] text-[#1E293B]">
+            <div>
+              <span className="block text-[10.5px] font-bold uppercase text-[#64748B] mb-0.5">Address</span>
+              {CONTACT.addressLines.map((line) => (
+                <span key={line} className="block font-semibold">
+                  {line}
+                </span>
+              ))}
+            </div>
+            <div>
+              <span className="block text-[10.5px] font-bold uppercase text-[#64748B] mb-0.5">Phone</span>
+              {CONTACT.phones.map((phone) => (
+                <a key={phone} href={telHref(phone)} className="block font-semibold hover:text-[#0B4F8A]">
+                  {phone}
+                </a>
+              ))}
+            </div>
+            <div>
+              <span className="block text-[10.5px] font-bold uppercase text-[#64748B] mb-0.5">Email &amp; Website</span>
+              <a href={`mailto:${CONTACT.email}`} className="block font-semibold text-[#0B4F8A] hover:underline break-all">
+                {CONTACT.email}
+              </a>
+              <a href={SITE_URL} className="block font-semibold text-[#0B4F8A] hover:underline">
+                {CONTACT.website}
+              </a>
+            </div>
           </div>
         </div>
       </div>
