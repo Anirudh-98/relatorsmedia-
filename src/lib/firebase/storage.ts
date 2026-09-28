@@ -1,4 +1,4 @@
-import { ref, uploadBytes, uploadString, getDownloadURL, deleteObject } from "firebase/storage";
+import { ref, uploadBytes, uploadString, getDownloadURL, deleteObject, FirebaseStorage } from "firebase/storage";
 import { storage } from "./config";
 
 /**
@@ -96,10 +96,12 @@ export async function toFirestoreSafePhoto(photo: string): Promise<string> {
  * Upload a member profile / ID card photo to Firebase Storage.
  * Compresses the image to reduce size without losing quality,
  * then uploads to Firebase Storage and returns the permanent download URL.
+ * Pass an isolated session's `targetStorage` to upload as the user signed in there.
  */
 export async function uploadMemberPhoto(
   fileOrDataUrl: File | string,
-  memberIdOrUid: string
+  memberIdOrUid: string,
+  targetStorage: FirebaseStorage = storage
 ): Promise<string> {
   // If already an HTTP/HTTPS URL or local path, return immediately without re-uploading
   if (typeof fileOrDataUrl === "string") {
@@ -115,7 +117,7 @@ export async function uploadMemberPhoto(
 
   const timestamp = Date.now();
   const storagePath = `members/${memberIdOrUid}/id_photo_${timestamp}.jpg`;
-  const storageRef = ref(storage, storagePath);
+  const storageRef = ref(targetStorage, storagePath);
 
   // Compress image before upload to drastically reduce size while preserving clarity
   let compressedDataUrl: string;

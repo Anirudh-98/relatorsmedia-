@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import { Auth, getAuth, initializeAuth, inMemoryPersistence, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { Firestore, getFirestore } from "firebase/firestore";
+import { FirebaseStorage, getStorage } from "firebase/storage";
 import { firebaseConfig } from "./config";
 
 export const ADMIN_EMAIL = "admin@realtorsmedia.com";
@@ -8,6 +9,7 @@ export const ADMIN_EMAIL = "admin@realtorsmedia.com";
 export interface IsolatedFirebase {
   auth: Auth;
   db: Firestore;
+  storage: FirebaseStorage;
 }
 
 const instances = new Map<string, IsolatedFirebase>();
@@ -15,7 +17,7 @@ const instances = new Map<string, IsolatedFirebase>();
 /**
  * A separate Firebase app whose auth lives only in memory. Signing in here never replaces
  * (or persists over) the visitor's own session on the main `auth` instance, and Firestore
- * calls made through its `db` are authenticated as the user signed in on this instance.
+ * and Storage calls made through its `db` / `storage` are authenticated as the user signed in on this instance.
  */
 export function getIsolatedFirebase(name: string): IsolatedFirebase {
   const cached = instances.get(name);
@@ -29,7 +31,7 @@ export function getIsolatedFirebase(name: string): IsolatedFirebase {
     // Already initialized (e.g. after hot reload)
     auth = getAuth(app);
   }
-  const instance = { auth, db: getFirestore(app) };
+  const instance = { auth, db: getFirestore(app), storage: getStorage(app) };
   instances.set(name, instance);
   return instance;
 }

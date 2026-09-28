@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Caveat, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { SITE_URL } from "@/lib/site";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -23,6 +24,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "REALTORS MEDIA | Real Estate Information, People, Properties & Opportunities",
   description:
     "Real estate information, properties, projects, professionals, opportunities, market insights and networking through REALTORS MEDIA.",

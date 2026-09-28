@@ -1,0 +1,51 @@
+# REALTORS MEDIA
+
+> Realtors Media (https://www.realtorsmedia.world) is an Indian real estate media platform and professional network. It publishes real estate news and market insights, lists properties and projects, connects buyers with verified realtors, builders and allied professionals, and issues verified member and employee ID cards that anyone can check through a public QR verification page.
+
+Key facts:
+- Audience: property buyers and investors, realtors and channel partners, builders and developers, and allied professionals (architects, civil engineers, legal and Vastu consultants, material suppliers) across India, with a focus on Hyderabad and Telangana.
+- Member ID cards come in three tiers: Green, Blue and Orange. Each card has a unique Member ID (for example RM-C-1111, RM-B-1111, RM-A-1111) and a QR code linking to its verification page. Employee cards use RM-E-* IDs.
+- To check whether a card is genuine, open https://www.realtorsmedia.world/verify and enter the ID, or scan the QR code on the card. Replaced or suspended cards do not verify.
+
+## Properties and projects
+
+- [Properties](https://www.realtorsmedia.world/properties): property listings for sale and rent
+- [Projects](https://www.realtorsmedia.world/projects): residential and commercial projects
+- [Categories](https://www.realtorsmedia.world/categories): open plots, gated communities, apartments, duplexes, villas, houses, farm houses, commercial, industrial and agricultural land
+- [Post a property](https://www.realtorsmedia.world/post-property): free property listing form
+- [Classifieds](https://www.realtorsmedia.world/classifieds): real estate hub for realtors, engineers, suppliers, architects and Vastu consultants
+- [Investors](https://www.realtorsmedia.world/investors): investment opportunities, pre-leased assets and land banks
+
+## Membership and verification
+
+- [Register](https://www.realtorsmedia.world/register): member registration and ID card
+- [Verify an ID card](https://www.realtorsmedia.world/verify): public ID card verification
+- [Members](https://www.realtorsmedia.world/members): member network
+- [Realtors](https://www.realtorsmedia.world/realtors): realtor directory
+- [Help center](https://www.realtorsmedia.world/help): FAQs, ID card guidelines and listing procedures
+
+## Media and community
+
+- [News](https://www.realtorsmedia.world/news): real estate news and market updates
+- [Realtors Media TV](https://www.realtorsmedia.world/tv): video broadcasts
+- [Gallery](https://www.realtorsmedia.world/gallery): expos, conclaves and events
+- [Community](https://www.realtorsmedia.world/community): professional community
+- [Real estate hub](https://www.realtorsmedia.world/real-estate-hub): services and resources
+
+## Organization
+
+- [About](https://www.realtorsmedia.world/about)
+- [Core committee](https://www.realtorsmedia.world/core-committee)
+- [Advisory board](https://www.realtorsmedia.world/advisors)
+- [Associates and partners](https://www.realtorsmedia.world/associates)
+- [Legal cell](https://www.realtorsmedia.world/legal-cell): RERA, title checks and contracts
+- [Business opportunities](https://www.realtorsmedia.world/business-opportunities): franchises and partnerships
+- [Advertise](https://www.realtorsmedia.world/advertise)
+- [Contact](https://www.realtorsmedia.world/contact)
+
+## Optional
+
+- [Services](https://www.realtorsmedia.world/services)
+- [Mobile app](https://www.realtorsmedia.world/mobile-app)
+- [Privacy policy](https://www.realtorsmedia.world/privacy-policy)
+- [Terms of use](https://www.realtorsmedia.world/terms)

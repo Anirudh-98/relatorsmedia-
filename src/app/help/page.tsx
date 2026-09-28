@@ -17,6 +17,8 @@ import {
   FaUserCheck,
   FaCheckCircle,
 } from "react-icons/fa";
+import { FormError } from "@/components/ui/FormError";
+import { firstFormError, helpTicketSchema } from "@/lib/validation/formSchemas";
 
 interface FAQItem {
   id: string;
@@ -75,6 +77,9 @@ export default function HelpPage() {
   const [openFaq, setOpenFaq] = useState<string | null>("faq-1");
   const [searchQuery, setSearchQuery] = useState("");
   const [ticketSubmitted, setTicketSubmitted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  // Generated once per submission so the number shown does not change on re-render
+  const [ticketNumber, setTicketNumber] = useState(0);
   const [ticketData, setTicketData] = useState({
     name: "",
     phone: "",
@@ -96,6 +101,10 @@ export default function HelpPage() {
 
   const handleTicketSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = firstFormError(helpTicketSchema, ticketData);
+    setFormError(validationError);
+    if (validationError) return;
+    setTicketNumber(Math.floor(10000 + Math.random() * 90000));
     setTicketSubmitted(true);
   };
 
@@ -270,7 +279,7 @@ export default function HelpPage() {
                   <FaCheckCircle className="text-3xl mx-auto" />
                   <h4 className="font-black text-[14px]">Support Ticket Registered</h4>
                   <p className="text-[12px] leading-relaxed">
-                    Ticket #RM-{Math.floor(10000 + Math.random() * 90000)} has been generated. Our technical support executive will contact you shortly.
+                    Ticket #RM-{ticketNumber} has been generated. Our technical support executive will contact you shortly.
                   </p>
                   <button
                     type="button"
@@ -335,6 +344,7 @@ export default function HelpPage() {
                     />
                   </div>
 
+                  <FormError message={formError} />
                   <button
                     type="submit"
                     className="w-full bg-[#073F73] hover:bg-[#06345F] text-white font-black py-2 rounded-[3px] uppercase tracking-wider text-[12px] shadow-sm transition-colors mt-2"

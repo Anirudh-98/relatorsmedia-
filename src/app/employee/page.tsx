@@ -198,7 +198,7 @@ function EmployeeCardGenerator({ issuer, onSignOut }: { issuer: CardIssuer; onSi
 
   const refreshCards = useCallback(async () => {
     try {
-      setCards(await getEmployeeIdCards());
+      setCards(await getEmployeeIdCards(getCardIssuerFirebase().db));
     } catch (err) {
       console.warn("Could not load employee ID cards:", err);
     } finally {
@@ -207,18 +207,18 @@ function EmployeeCardGenerator({ issuer, onSignOut }: { issuer: CardIssuer; onSi
   }, []);
 
   const loadPreviewId = useCallback(async () => {
-    const id = await peekNextEmployeeStaffId();
+    const id = await peekNextEmployeeStaffId(getCardIssuerFirebase().db);
     setPreviewId(id);
     setForm((prev) => ({ ...prev, employeeId: id }));
   }, []);
 
   // Initial load: state is only set from the async callbacks
   useEffect(() => {
-    getEmployeeIdCards()
+    getEmployeeIdCards(getCardIssuerFirebase().db)
       .then(setCards)
       .catch((err) => console.warn("Could not load employee ID cards:", err))
       .finally(() => setCardsLoading(false));
-    peekNextEmployeeStaffId().then((id) => {
+    peekNextEmployeeStaffId(getCardIssuerFirebase().db).then((id) => {
       setPreviewId(id);
       setForm((prev) => ({ ...prev, employeeId: prev.employeeId || id }));
     });
@@ -310,12 +310,12 @@ function EmployeeCardGenerator({ issuer, onSignOut }: { issuer: CardIssuer; onSi
         }
         employeeId = typedId;
       } else {
-        employeeId = await getNextEmployeeStaffId();
+        employeeId = await getNextEmployeeStaffId(getCardIssuerFirebase().db);
       }
 
       let photoUrl = form.photo;
       try {
-        photoUrl = await uploadMemberPhoto(form.photo, `employee_${employeeId}`);
+        photoUrl = await uploadMemberPhoto(form.photo, `employee_${employeeId}`, getCardIssuerFirebase().storage);
       } catch (uploadErr) {
         console.warn("Storage upload warning, storing photo inline:", uploadErr);
         photoUrl = await toFirestoreSafePhoto(form.photo);

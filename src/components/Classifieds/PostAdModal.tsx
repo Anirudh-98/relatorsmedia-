@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import { FaTimes, FaBullhorn, FaCheck, FaShieldAlt } from "react-icons/fa";
 import { realEstateHubItems } from "@/data/portalData";
 import { CITIES_LIST, ClassifiedAd } from "@/data/classifiedsData";
+import { FormError } from "@/components/ui/FormError";
+import { firstFormError, postAdSchema } from "@/lib/validation/formSchemas";
 
 export interface PostAdModalProps {
   isOpen: boolean;
@@ -35,11 +37,15 @@ export const PostAdModal: React.FC<PostAdModalProps> = ({
   });
 
   const [isSuccess, setIsSuccess] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = firstFormError(postAdSchema, formData);
+    setFormError(validationError);
+    if (validationError) return;
 
     const category =
       realEstateHubItems.find((c) => c.id === formData.categoryId) ||
@@ -350,6 +356,8 @@ export const PostAdModal: React.FC<PostAdModalProps> = ({
                   Your classified ad will be published on the Realtors Media Classifieds Hub with verified badge and direct contact buttons.
                 </span>
               </div>
+
+              <FormError message={formError} />
 
               {/* Buttons */}
               <div className="flex items-center justify-end gap-2.5 pt-2">

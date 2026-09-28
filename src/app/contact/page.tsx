@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { FaPhoneAlt, FaEnvelope, FaMapMarkerAlt, FaClock, FaCheckCircle, FaWhatsapp } from "react-icons/fa";
+import { FormError } from "@/components/ui/FormError";
+import { firstFormError, contactSchema } from "@/lib/validation/formSchemas";
 
 interface OfficeLocation {
   city: string;
@@ -52,9 +54,13 @@ export default function ContactPage() {
     message: "",
   });
   const [submitted, setSubmitted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = firstFormError(contactSchema, formData);
+    setFormError(validationError);
+    if (validationError) return;
     setSubmitted(true);
   };
 
@@ -171,6 +177,7 @@ export default function ContactPage() {
                   />
                 </div>
 
+                <FormError message={formError} />
                 <button
                   type="submit"
                   className="bg-[#073F73] hover:bg-[#06345F] text-white font-extrabold text-[12px] px-6 py-2.5 rounded-md uppercase tracking-wider transition-colors shadow-xs"

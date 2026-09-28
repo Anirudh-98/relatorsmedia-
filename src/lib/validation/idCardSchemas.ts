@@ -4,7 +4,7 @@ export const PASSWORD_MIN_LENGTH = 6;
 export const PASSWORD_MAX_LENGTH = 32;
 
 // Indian mobile: 10 digits starting 6-9, optionally written with +91 / 91 / 0 and spaces or dashes
-const mobile = z
+export const mobile = z
   .string()
   .trim()
   .min(1, "Mobile number is required.")
@@ -13,14 +13,14 @@ const mobile = z
     "Enter a valid 10-digit Indian mobile number (e.g. +91 98765 43210)."
   );
 
-const fullName = z
+export const fullName = z
   .string()
   .trim()
   .min(2, "Full name must be at least 2 characters.")
   .max(60, "Full name must be at most 60 characters.")
   .regex(/^[\p{L} .'-]+$/u, "Full name can only contain letters, spaces, dots, hyphens and apostrophes.");
 
-const email = z.string().trim().min(1, "Email ID is required.").pipe(z.email("Enter a valid email address."));
+export const email = z.string().trim().min(1, "Email ID is required.").pipe(z.email("Enter a valid email address."));
 
 const optionalText = (label: string, max: number) =>
   z.string().trim().max(max, `${label} must be at most ${max} characters.`);
@@ -30,6 +30,9 @@ const cardId = z
   .string()
   .trim()
   .refine((v) => v === "" || /^RM-[A-Z]-\d{3,}$/i.test(v), "ID must look like RM-A-1116.");
+
+// RM-E-* IDs are reserved for employee cards issued by staff
+const memberCardId = cardId.refine((v) => !/^RM-E-/i.test(v), "RM-E IDs are reserved for employee cards.");
 
 export const passwordSchema = z
   .string()
@@ -56,7 +59,7 @@ const memberCardFields = {
   experience: z.string(),
   specialization: z.string(),
   photo: z.string().min(1, "⚠ Without a photo you will not get an ID card. Please take a photo or upload one from your gallery."),
-  employeeId: cardId,
+  employeeId: memberCardId,
 };
 
 /** Member ID card form when the logged-in member edits their own card (no password fields). */

@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { FaShieldAlt, FaFileContract, FaBalanceScale, FaCheckCircle, FaPhoneAlt, FaEnvelope } from "react-icons/fa";
+import { FormError } from "@/components/ui/FormError";
+import { firstFormError, legalConsultSchema } from "@/lib/validation/formSchemas";
 
 export default function LegalCellPage() {
   const [formData, setFormData] = useState({
@@ -13,9 +15,16 @@ export default function LegalCellPage() {
     propertyDetails: "",
   });
   const [submitted, setSubmitted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  // Generated once per submission so the reference shown does not change on re-render
+  const [referenceNumber, setReferenceNumber] = useState(0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = firstFormError(legalConsultSchema, formData);
+    setFormError(validationError);
+    if (validationError) return;
+    setReferenceNumber(Math.floor(1000 + Math.random() * 9000));
     setSubmitted(true);
   };
 
@@ -124,7 +133,7 @@ export default function LegalCellPage() {
                   Consultation Request Registered!
                 </h4>
                 <p className="text-[12px] text-[#2D3748] mt-1">
-                  Our Senior Legal Officer will review your submission and contact you at {formData.phone} shortly. Reference ID: <span className="font-mono font-bold">LEG-2026-{Math.floor(1000 + Math.random() * 9000)}</span>
+                  Our Senior Legal Officer will review your submission and contact you at {formData.phone} shortly. Reference ID: <span className="font-mono font-bold">LEG-2026-{referenceNumber}</span>
                 </p>
                 <button
                   type="button"
@@ -210,6 +219,7 @@ export default function LegalCellPage() {
                   />
                 </div>
 
+                <FormError message={formError} />
                 <button
                   type="submit"
                   className="w-full bg-[#073F73] hover:bg-[#06345F] text-white font-extrabold text-[12px] py-2 rounded-md uppercase tracking-wider transition-colors shadow-xs"

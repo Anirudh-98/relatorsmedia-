@@ -2,7 +2,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // ========================================================
+    // ROLES
+    //   admin  - admin@realtorsmedia.com (manages issuers, sees every card)
+    //   issuer - active `staff/{uid}` record created by the admin (employee cards)
+    //   member - any signed-in user, limited to their own records
+    //   public - anyone: verification lookups and guest submissions only
+    // ========================================================
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -17,98 +23,184 @@ service cloud.firestore {
       return isAuthenticated() && exists(staffPath) && get(staffPath).data.active == true;
     }
 
+    function isStaff() {
+      return isAdmin() || isIssuer();
+    }
+
+    // Public single-record lookups (verification, login, password reset) are allowed;
+    // bulk listing of personal data is not
+    function isSingleLookup() {
+      return request.query.limit <= 1;
+    }
+
+    function isShortString(value, max) {
+      return value is string && value.size() <= max;
+    }
+
     // ========================================================
-    // 1. MEMBERS COLLECTION (`members/{memberId}`)
-    // Full CRUD operations for member accounts
+    // 1. MEMBERS (`members/{uid}`)
     // ========================================================
     match /members/{memberId} {
-      // READ: Public for directory and member profile verification
-      allow get, list: if true;
-      
-      // CREATE: Authenticated user creating their own member profile on enrollment
-      allow create: if isAuthenticated() && (request.auth.uid == memberId || request.auth.uid == request.resource.data.uid);
-      
-      // UPDATE: Only the authenticated member can update their own profile
-      allow update: if isAuthenticated() && (request.auth.uid == memberId || request.auth.uid == resource.data.uid);
-      
-      // DELETE: Authenticated member deleting their account
-      allow delete: if isAuthenticated() && (request.auth.uid == memberId || request.auth.uid == resource.data.uid);
+      allow get: if true;
+      allow list: if isSingleLookup() || isAdmin();
+
+      // A member creates only their own profile (document id == their uid)
+      allow create: if isAuthenticated()
+        && request.auth.uid == memberId
+        && request.resource.data.uid == request.auth.uid;
+
+      // A member updates only their own profile; ownership cannot be reassigned
+      allow update: if isAdmin() || (
+        isAuthenticated()
+        && (request.auth.uid == memberId || request.auth.uid == resource.data.uid)
+        && request.resource.data.uid == request.auth.uid
+        && !(resource.data.get('status', '') == 'SUSPENDED' && request.resource.data.get('status', '') != 'SUSPENDED')
+      );
+
+      allow delete: if isAdmin() || (
+        isAuthenticated() && (request.auth.uid == memberId || request.auth.uid == resource.data.uid)
+      );
     }
 
     // ========================================================
     // 2. ID CARDS REGISTRY (`idCards/{cardId}`)
-    // Full CRUD operations for ID card generation and QR verification
     // ========================================================
     match /idCards/{cardId} {
-      // READ: Public for QR code scanning & credential verification (/verify/[id])
-      allow get, list: if true;
-      
-      // CREATE: the admin, the issuer login (employee cards), or a member issuing their own card
+      // Public QR verification (/verify/[id]) reads one card at a time
+      allow get: if true;
+      allow list: if isSingleLookup()
+        || isAdmin()
+        || (isIssuer() && resource.data.cardType == 'employee');
+
+      // A member's own card: never an employee card, never an RM-E-* ID,
+      // and the document id must match the card's employeeId
+      function isOwnMemberCard() {
+        let d = request.resource.data;
+        return isAuthenticated()
+          && d.uid == request.auth.uid
+          && d.get('cardType', 'member') == 'member'
+          && d.get('employeeId', cardId) == cardId
+          && !cardId.upper().matches('^RM-E-.*');
+      }
+
       allow create: if isAdmin()
         || (isIssuer() && request.resource.data.cardType == 'employee')
-        || (isAuthenticated() && request.resource.data.uid == request.auth.uid);
+        || isOwnMemberCard();
 
-      // UPDATE: the admin, the issuer login (employee cards only), or the member who owns
-      // the card (ownership cannot be reassigned)
       allow update: if isAdmin()
         || (isIssuer() && resource.data.cardType == 'employee' && request.resource.data.cardType == 'employee')
         || (
-          isAuthenticated() &&
-          resource.data.uid == request.auth.uid &&
-          request.resource.data.uid == request.auth.uid
+          isOwnMemberCard()
+          && resource.data.uid == request.auth.uid
+          && resource.data.get('cardType', 'member') == 'member'
+          // A card suspended by the admin cannot be re-activated by its owner
+          && !(resource.data.get('status', '') == 'SUSPENDED' && request.resource.data.get('status', '') != 'SUSPENDED')
         );
 
-      // DELETE: admin only
       allow delete: if isAdmin();
     }
 
     // ========================================================
     // 3. PROPERTY LISTINGS (`properties/{propertyId}`)
-    // Full CRUD operations for real estate property marketplace
+    // Guests may post; only the author or the admin may edit or remove
     // ========================================================
     match /properties/{propertyId} {
-      // READ: Public for property search and listings
       allow get, list: if true;
-      
-      // CREATE: Authenticated members or registered posters
-      allow create: if isAuthenticated() || true;
-      
-      // UPDATE: Poster can edit property details, or public view/inquiry counter increment
-      allow update: if true;
-      
-      // DELETE: Only the property author can remove their listing
-      allow delete: if isAuthenticated() && (request.auth.uid == resource.data.authorUid || request.auth.uid == resource.data.uid);
+
+      allow create: if request.resource.data.keys().hasOnly([
+          'title', 'propertyType', 'listingType', 'city', 'locality', 'price', 'area', 'bhk',
+          'reraNumber', 'name', 'phone', 'email', 'role', 'description', 'imageUrl',
+          'authorUid', 'status', 'views', 'leads', 'createdAt'
+        ])
+        && isShortString(request.resource.data.title, 200)
+        && isShortString(request.resource.data.name, 100)
+        && isShortString(request.resource.data.phone, 30)
+        && isShortString(request.resource.data.get('description', ''), 5000)
+        && isShortString(request.resource.data.get('imageUrl', ''), 2048)
+        && request.resource.data.status == 'Active'
+        && request.resource.data.get('views', 0) is int && request.resource.data.get('views', 0) <= 1
+        && request.resource.data.get('leads', 0) == 0
+        && (
+          (isAuthenticated() && request.resource.data.authorUid == request.auth.uid)
+          || (!isAuthenticated() && request.resource.data.authorUid == 'guest')
+        );
+
+      function isAuthor() {
+        return isAuthenticated()
+          && resource.data.get('authorUid', '') != 'guest'
+          && (request.auth.uid == resource.data.get('authorUid', '') || request.auth.uid == resource.data.get('uid', ''));
+      }
+
+      // Anyone may bump the view / lead counters by one; nothing else
+      function isCounterBump() {
+        let changed = request.resource.data.diff(resource.data).affectedKeys();
+        return changed.hasOnly(['views', 'leads'])
+          && request.resource.data.get('views', 0) - resource.data.get('views', 0) <= 1
+          && request.resource.data.get('views', 0) >= resource.data.get('views', 0)
+          && request.resource.data.get('leads', 0) - resource.data.get('leads', 0) <= 1
+          && request.resource.data.get('leads', 0) >= resource.data.get('leads', 0);
+      }
+
+      allow update: if isAdmin()
+        || (isAuthor() && request.resource.data.authorUid == resource.data.authorUid)
+        || isCounterBump();
+
+      allow delete: if isAdmin() || isAuthor();
     }
 
     // ========================================================
     // 4. LEADS & INQUIRIES (`leads/{leadId}`)
-    // Full CRUD operations for client inquiries and buyer leads
+    // Anyone may submit; only the member the lead belongs to (or the admin) may see it
     // ========================================================
     match /leads/{leadId} {
-      // CREATE: Prospective buyers submitting contact inquiries
-      allow create: if true;
-      
-      // READ: Authenticated agents and team members
-      allow get, list: if isAuthenticated();
-      
-      // UPDATE, DELETE: Authenticated lead recipient/manager
-      allow update, delete: if isAuthenticated();
+      allow create: if request.resource.data.keys().hasOnly([
+          'name', 'phone', 'email', 'propertyId', 'propertyName', 'budget', 'message',
+          'memberUid', 'status', 'createdAt'
+        ])
+        && isShortString(request.resource.data.name, 100)
+        && isShortString(request.resource.data.phone, 30)
+        && isShortString(request.resource.data.get('message', ''), 2000)
+        && request.resource.data.status == 'New';
+
+      allow get, list: if isAdmin()
+        || (isAuthenticated() && resource.data.get('memberUid', '') == request.auth.uid);
+
+      allow update: if isAdmin() || (
+        isAuthenticated()
+        && resource.data.get('memberUid', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+      );
+
+      allow delete: if isAdmin()
+        || (isAuthenticated() && resource.data.get('memberUid', '') == request.auth.uid);
     }
 
     // ========================================================
     // 5. SEQUENTIAL ID COUNTERS (`counters/{counterId}`)
-    // Atomic sequential member issuance (1111, 1112...)
+    // Written while a card is issued; can only move forward
     // ========================================================
     match /counters/{counterId} {
-      // READ: Public to preview next available sequential ID on register page
+      // Public to preview the next ID on the register page
       allow get: if true;
-      allow list: if isAuthenticated();
-      
-      // CREATE, UPDATE: Managed atomically during enrollment transactions
-      allow create, update: if true;
-      
-      // DELETE: Administrative reset only
-      allow delete: if isAuthenticated();
+      allow list: if isAdmin();
+
+      function isValidCounterWrite() {
+        let d = request.resource.data;
+        return isAuthenticated()
+          && (counterId == 'memberSequence' || (counterId == 'employeeSequence' && isStaff()))
+          && d.currentSequence is int
+          && d.currentSequence > 1110
+          && d.currentSequence < 100000000;
+      }
+
+      allow create: if isValidCounterWrite()
+        && request.resource.data.keys().hasOnly(['currentSequence', 'lastEmployeeId', 'lastPrefix', 'updatedAt']);
+
+      allow update: if isValidCounterWrite()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentSequence', 'lastEmployeeId', 'lastPrefix', 'updatedAt'])
+        && request.resource.data.currentSequence >= resource.data.get('currentSequence', 0);
+
+      allow delete: if isAdmin();
     }
 
     // ========================================================

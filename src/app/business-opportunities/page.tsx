@@ -4,6 +4,8 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { FaBriefcase, FaHandshake, FaChartLine, FaCheckCircle, FaCity, FaRupeeSign } from "react-icons/fa";
+import { FormError } from "@/components/ui/FormError";
+import { firstFormError, franchiseSchema } from "@/lib/validation/formSchemas";
 
 export default function BusinessOpportunitiesPage() {
   const [formData, setFormData] = useState({
@@ -15,9 +17,13 @@ export default function BusinessOpportunitiesPage() {
     experience: "",
   });
   const [submitted, setSubmitted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = firstFormError(franchiseSchema, formData);
+    setFormError(validationError);
+    if (validationError) return;
     setSubmitted(true);
   };
 
@@ -230,6 +236,7 @@ export default function BusinessOpportunitiesPage() {
               </div>
 
               <div className="flex items-end">
+                <FormError message={formError} />
                 <button
                   type="submit"
                   className="w-full bg-[#073F73] hover:bg-[#06345F] text-white text-[12px] font-black py-2 rounded-md uppercase tracking-wider transition-colors shadow-2xs"

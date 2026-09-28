@@ -402,12 +402,15 @@ export function getPrefixForTier(tier: "green" | "blue" | "orange" | "red" | str
  * 2. `members` collection (checks `employeeId` fields)
  * 3. `counters/memberSequence`
  */
-export async function getLastGeneratedSequenceFromDatabase(targetPrefix?: string): Promise<number> {
+export async function getLastGeneratedSequenceFromDatabase(
+  targetPrefix?: string,
+  firestore: Firestore = db
+): Promise<number> {
   let highest = 1110;
 
   try {
     // 1. Inspect all records in `idCards` collection
-    const idCardsSnap = await getDocs(collection(db, "idCards"));
+    const idCardsSnap = await getDocs(collection(firestore, "idCards"));
     idCardsSnap.forEach((docSnap) => {
       const data = docSnap.data();
       const idsToCheck = [docSnap.id, data.employeeId, data.id].filter(Boolean);
@@ -432,7 +435,7 @@ export async function getLastGeneratedSequenceFromDatabase(targetPrefix?: string
 
   try {
     // 2. Inspect all records in `members` collection
-    const membersSnap = await getDocs(collection(db, "members"));
+    const membersSnap = await getDocs(collection(firestore, "members"));
     membersSnap.forEach((docSnap) => {
       const data = docSnap.data();
       const idsToCheck = [data.employeeId, data.memberId].filter(Boolean);
@@ -456,7 +459,7 @@ export async function getLastGeneratedSequenceFromDatabase(targetPrefix?: string
 
   try {
     // 3. Inspect global and prefix-specific counters in `counters`
-    const counterSnap = await getDoc(doc(db, "counters", "memberSequence"));
+    const counterSnap = await getDoc(doc(firestore, "counters", "memberSequence"));
     if (counterSnap.exists()) {
       const data = counterSnap.data();
       const seq = typeof data.currentSequence === "number" ? data.currentSequence : 0;
@@ -486,16 +489,19 @@ export async function getLastGeneratedSequenceFromDatabase(targetPrefix?: string
  * verifies that the candidate ID does not exist in `idCards` or `members`,
  * updates the counter atomically, and returns the unique ID.
  */
-export async function getNextEmployeeId(tier: "green" | "blue" | "orange" | "red" | string): Promise<string> {
+export async function getNextEmployeeId(
+  tier: "green" | "blue" | "orange" | "red" | string,
+  firestore: Firestore = db
+): Promise<string> {
   const prefix = getPrefixForTier(tier);
-  const counterRef = doc(db, "counters", "memberSequence");
+  const counterRef = doc(firestore, "counters", "memberSequence");
 
   try {
     // 1. Query Firestore database for highest existing sequence
-    const highestInDb = await getLastGeneratedSequenceFromDatabase(prefix);
+    const highestInDb = await getLastGeneratedSequenceFromDatabase(prefix, firestore);
 
     // 2. Atomically update counter in Firestore
-    const nextSeq = await runTransaction(db, async (transaction) => {
+    const nextSeq = await runTransaction(firestore, async (transaction) => {
       const counterSnap = await transaction.get(counterRef);
       let current = highestInDb;
 
@@ -527,7 +533,7 @@ export async function getNextEmployeeId(tier: "green" | "blue" | "orange" | "red
     let attempts = 0;
 
     while (attempts < 50) {
-      const existingCard = await getDoc(doc(db, "idCards", candidateId));
+      const existingCard = await getDoc(doc(firestore, "idCards", candidateId));
       if (!existingCard.exists()) {
         break;
       }
@@ -560,7 +566,7 @@ export async function getNextEmployeeId(tier: "green" | "blue" | "orange" | "red
     return candidateId;
   } catch (err) {
     console.warn("Database sequential ID fallback:", err);
-    const fallbackBase = await getLastGeneratedSequenceFromDatabase(prefix).catch(() => 1110);
+    const fallbackBase = await getLastGeneratedSequenceFromDatabase(prefix, firestore).catch(() => 1110);
     const fallbackSeq = fallbackBase + 1;
     if (typeof window !== "undefined") {
       localStorage.setItem("rm_member_seq", fallbackSeq.toString());
@@ -607,21 +613,22 @@ export async function peekNextEmployeeId(tier: "green" | "blue" | "orange" | "re
 
 export const EMPLOYEE_ID_PREFIX = "RM-E";
 
-async function getHighestEmployeeSequence(): Promise<number> {
+// Employee helpers take the issuer session's Firestore: listing employee cards is staff-only
+async function getHighestEmployeeSequence(firestore: Firestore): Promise<number> {
   let highest = 1110;
-  const snap = await getDocs(query(collection(db, "idCards"), where("cardType", "==", "employee")));
+  const snap = await getDocs(query(collection(firestore, "idCards"), where("cardType", "==", "employee")));
   snap.forEach((docSnap) => {
-    const match = docSnap.id.match(new RegExp(`^${EMPLOYEE_ID_PREFIX}-(\d+)$`, "i"));
+    const match = docSnap.id.match(new RegExp(`^${EMPLOYEE_ID_PREFIX}-(\\d+)$`, "i"));
     if (match) highest = Math.max(highest, parseInt(match[1], 10));
   });
   return highest;
 }
 
 /** Previews the next employee ID without consuming it. */
-export async function peekNextEmployeeStaffId(): Promise<string> {
+export async function peekNextEmployeeStaffId(firestore: Firestore = db): Promise<string> {
   try {
-    let seq = (await getHighestEmployeeSequence()) + 1;
-    const counterSnap = await getDoc(doc(db, "counters", "employeeSequence"));
+    let seq = (await getHighestEmployeeSequence(firestore)) + 1;
+    const counterSnap = await getDoc(doc(firestore, "counters", "employeeSequence"));
     const stored = counterSnap.exists() ? counterSnap.data().currentSequence : 0;
     if (typeof stored === "number" && stored >= seq) seq = stored + 1;
     return `${EMPLOYEE_ID_PREFIX}-${seq}`;
@@ -632,11 +639,11 @@ export async function peekNextEmployeeStaffId(): Promise<string> {
 }
 
 /** Atomically reserves the next employee ID. */
-export async function getNextEmployeeStaffId(): Promise<string> {
-  const counterRef = doc(db, "counters", "employeeSequence");
-  const highestInDb = await getHighestEmployeeSequence().catch(() => 1110);
+export async function getNextEmployeeStaffId(firestore: Firestore = db): Promise<string> {
+  const counterRef = doc(firestore, "counters", "employeeSequence");
+  const highestInDb = await getHighestEmployeeSequence(firestore).catch(() => 1110);
 
-  let seq = await runTransaction(db, async (transaction) => {
+  let seq = await runTransaction(firestore, async (transaction) => {
     const counterSnap = await transaction.get(counterRef);
     const stored = counterSnap.exists() ? counterSnap.data().currentSequence : 0;
     const next = Math.max(highestInDb, typeof stored === "number" ? stored : 0) + 1;
@@ -646,7 +653,7 @@ export async function getNextEmployeeStaffId(): Promise<string> {
 
   // Skip any ID that was typed in manually and already exists
   for (let attempts = 0; attempts < 50; attempts++) {
-    const existing = await getDoc(doc(db, "idCards", `${EMPLOYEE_ID_PREFIX}-${seq}`));
+    const existing = await getDoc(doc(firestore, "idCards", `${EMPLOYEE_ID_PREFIX}-${seq}`));
     if (!existing.exists()) break;
     seq++;
   }
@@ -656,8 +663,8 @@ export async function getNextEmployeeStaffId(): Promise<string> {
 }
 
 /** All employee ID cards, newest ID first. */
-export async function getEmployeeIdCards(): Promise<IdCardRecordData[]> {
-  const snap = await getDocs(query(collection(db, "idCards"), where("cardType", "==", "employee")));
+export async function getEmployeeIdCards(firestore: Firestore = db): Promise<IdCardRecordData[]> {
+  const snap = await getDocs(query(collection(firestore, "idCards"), where("cardType", "==", "employee")));
   return snap.docs
     .map((d) => d.data() as IdCardRecordData)
     .sort((a, b) => b.employeeId.localeCompare(a.employeeId, undefined, { numeric: true }));

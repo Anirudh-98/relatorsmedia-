@@ -16,6 +16,8 @@ import {
   FaPhoneAlt,
   FaHandshake,
 } from "react-icons/fa";
+import { FormError } from "@/components/ui/FormError";
+import { firstFormError, investorSchema } from "@/lib/validation/formSchemas";
 
 interface InvestmentDeal {
   id: string;
@@ -97,6 +99,7 @@ export default function InvestorsPage() {
     preferredAsset: "Commercial Pre-Leased",
   });
   const [formSubmitted, setFormSubmitted] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Calculated values
   const principal = calcAmount * 100000;
@@ -105,6 +108,9 @@ export default function InvestorsPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = firstFormError(investorSchema, formData);
+    setFormError(validationError);
+    if (validationError) return;
     setFormSubmitted(true);
   };
 
@@ -474,6 +480,7 @@ export default function InvestorsPage() {
                     </select>
                   </div>
 
+                  <FormError message={formError} />
                   <button
                     type="submit"
                     className="w-full bg-[#E21F2F] hover:bg-[#c91826] text-white font-black py-2 rounded-[3px] uppercase tracking-wider text-[12px] shadow-sm transition-colors mt-2"

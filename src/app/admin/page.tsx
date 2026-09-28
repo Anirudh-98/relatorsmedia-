@@ -26,6 +26,7 @@ import {
 } from "@/lib/firebase/staff";
 import { IdCardRecordData } from "@/lib/firebase/db";
 import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
+import { firstFormError, issuerAccountSchema } from "@/lib/validation/formSchemas";
 import { PASSWORD_HINT, PASSWORD_MAX_LENGTH } from "@/lib/validation/idCardSchemas";
 
 const inputClass =
@@ -322,6 +323,11 @@ function IssuerLoginPanel({
     e.preventDefault();
     setError(null);
     setSuccess(null);
+    const validationError = firstFormError(issuerAccountSchema, { name });
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
     setBusy(true);
     try {
       const { db } = getAdminFirebase();

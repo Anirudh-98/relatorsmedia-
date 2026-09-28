@@ -13,6 +13,8 @@ import {
   FaArrowRight,
   FaCheckCircle,
 } from "react-icons/fa";
+import { FormError } from "@/components/ui/FormError";
+import { firstFormError, newsletterSchema } from "@/lib/validation/formSchemas";
 
 interface NewsArticle {
   id: string;
@@ -104,6 +106,7 @@ export default function NewsPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [subscribed, setSubscribed] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [subEmail, setSubEmail] = useState("");
 
   const categories = ["All", "Infrastructure", "RERA & Legal", "Market Trends", "Project Launch"];
@@ -118,6 +121,9 @@ export default function NewsPage() {
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = firstFormError(newsletterSchema, { email: subEmail });
+    setFormError(validationError);
+    if (validationError) return;
     if (subEmail.trim()) {
       setSubscribed(true);
     }
@@ -222,22 +228,25 @@ export default function NewsPage() {
               <span>Subscribed Successfully!</span>
             </div>
           ) : (
-            <form onSubmit={handleSubscribe} className="flex gap-2 w-full md:w-auto">
-              <input
-                type="email"
-                required
-                placeholder="Enter your email address..."
-                value={subEmail}
-                onChange={(e) => setSubEmail(e.target.value)}
-                className="px-3 py-1.5 text-[12px] text-gray-800 bg-white rounded-[3px] focus:outline-none w-full md:w-64"
-              />
-              <button
-                type="submit"
-                className="bg-[#E21F2F] hover:bg-[#c91826] text-white text-[11px] font-black uppercase px-4 py-1.5 rounded-[3px] transition-colors flex-shrink-0"
-              >
-                Subscribe
-              </button>
-            </form>
+            <div className="w-full md:w-auto space-y-1.5">
+              <form onSubmit={handleSubscribe} className="flex gap-2 w-full md:w-auto">
+                <input
+                  type="email"
+                  required
+                  placeholder="Enter your email address..."
+                  value={subEmail}
+                  onChange={(e) => setSubEmail(e.target.value)}
+                  className="px-3 py-1.5 text-[12px] text-gray-800 bg-white rounded-[3px] focus:outline-none w-full md:w-64"
+                />
+                <button
+                  type="submit"
+                  className="bg-[#E21F2F] hover:bg-[#c91826] text-white text-[11px] font-black uppercase px-4 py-1.5 rounded-[3px] transition-colors flex-shrink-0"
+                >
+                  Subscribe
+                </button>
+              </form>
+              <FormError message={formError} />
+            </div>
           )}
         </div>
       </div>

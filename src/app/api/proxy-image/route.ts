@@ -3,7 +3,21 @@ import { NextRequest, NextResponse } from "next/server";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Blocks requests to the server's own network (localhost, private and link-local ranges)
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+
+// Only hosts that serve the site's own images (Firebase Storage, Google profile photos, our domains).
+// An allowlist also rules out requests to the server's own network (localhost, private ranges).
+const ALLOWED_HOSTS = [
+  "firebasestorage.googleapis.com",
+  "storage.googleapis.com",
+  "lh3.googleusercontent.com",
+  "realtorsmedia.world",
+  "www.realtorsmedia.world",
+  "realtorsmedia.com",
+  "www.realtorsmedia.com",
+];
+const ALLOWED_HOST_SUFFIXES = [".firebasestorage.app"];
+
 function isAllowedImageUrl(raw: string): boolean {
   let url: URL;
   try {
@@ -11,14 +25,26 @@ function isAllowedImageUrl(raw: string): boolean {
   } catch {
     return false;
   }
-  if (url.protocol !== "https:") return false;
-  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal") || host.endsWith(".local")) {
-    return false;
-  }
-  if (/^(127\.|10\.|0\.|169\.254\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) return false;
-  if (host.includes(":") && (host === "::1" || /^(fc|fd|fe80)/.test(host) || host.startsWith("::ffff:"))) return false;
-  return true;
+  if (url.protocol !== "https:" || url.username || url.password || (url.port && url.port !== "443")) return false;
+  const host = url.hostname.toLowerCase();
+  return ALLOWED_HOSTS.includes(host) || ALLOWED_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+}
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Allow-Headers": "*",
+};
+
+// Proxied bytes are served from our origin: never let them be sniffed or run as a document
+const SAFE_HEADERS = {
+  ...CORS_HEADERS,
+  "X-Content-Type-Options": "nosniff",
+  "Content-Security-Policy": "default-src 'none'; sandbox",
+};
+
+function errorResponse(message: string, status: number) {
+  return new NextResponse(message, { status, headers: SAFE_HEADERS });
 }
 
 export async function GET(request: NextRequest) {
@@ -26,69 +52,54 @@ export async function GET(request: NextRequest) {
   const imageUrl = searchParams.get("url");
 
   if (!imageUrl) {
-    return new NextResponse("Missing url parameter", {
-      status: 400,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
-    });
+    return errorResponse("Missing url parameter", 400);
   }
 
-  if (!isAllowedImageUrl(imageUrl)) {
-    return new NextResponse("URL not allowed", { status: 400 });
+  if (imageUrl.length > 4096 || !isAllowedImageUrl(imageUrl)) {
+    return errorResponse("URL not allowed", 400);
   }
 
   try {
     const res = await fetch(imageUrl, {
       cache: "no-store",
       redirect: "error",
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!res.ok) {
-      return new NextResponse(`Failed to fetch image: ${res.statusText}`, {
-        status: res.status,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-        },
-      });
+      return errorResponse("Failed to fetch image", res.status === 404 ? 404 : 502);
     }
 
-    const contentType = res.headers.get("content-type") || "";
-    // Only images are proxied
-    if (!contentType.startsWith("image/")) {
-      return new NextResponse("Not an image", { status: 415 });
+    const contentType = (res.headers.get("content-type") || "").toLowerCase();
+    // Only raster images are proxied: SVG can carry scripts
+    if (!contentType.startsWith("image/") || contentType.startsWith("image/svg")) {
+      return errorResponse("Not an image", 415);
+    }
+    const declaredLength = Number(res.headers.get("content-length") || 0);
+    if (declaredLength > MAX_IMAGE_BYTES) {
+      return errorResponse("Image too large", 413);
     }
     const arrayBuffer = await res.arrayBuffer();
+    if (arrayBuffer.byteLength > MAX_IMAGE_BYTES) {
+      return errorResponse("Image too large", 413);
+    }
 
     return new NextResponse(arrayBuffer, {
       status: 200,
       headers: {
+        ...SAFE_HEADERS,
         "Content-Type": contentType,
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-        "Access-Control-Allow-Headers": "*",
         "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
         "Pragma": "no-cache",
         "Expires": "0",
       },
     });
   } catch (error) {
-    return new NextResponse(`Error proxying image: ${(error as Error)?.message}`, {
-      status: 500,
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-      },
-    });
+    console.error("proxy-image error:", error);
+    return errorResponse("Error proxying image", 502);
   }
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
-      "Access-Control-Allow-Headers": "*",
-    },
-  });
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
 }

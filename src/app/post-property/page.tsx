@@ -8,6 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { uploadPropertyImage } from "@/lib/firebase/storage";
 import { createPropertyListing } from "@/lib/firebase/db";
 import { submitPropertyCloudFunction } from "@/lib/firebase/functions";
+import { firstFormError, postPropertySchema } from "@/lib/validation/formSchemas";
 
 export default function PostPropertyPage() {
   const { user, memberProfile } = useAuth();
@@ -58,6 +59,21 @@ export default function PostPropertyPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+
+    const validationError = firstFormError(postPropertySchema, formData);
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+    if (selectedImageFile && (!selectedImageFile.type.startsWith("image/") || selectedImageFile.type.startsWith("image/svg"))) {
+      setErrorMessage("Please upload a JPG, PNG or WEBP photo.");
+      return;
+    }
+    if (selectedImageFile && selectedImageFile.size > 15 * 1024 * 1024) {
+      setErrorMessage("Property photo must be smaller than 15 MB.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -109,7 +125,11 @@ export default function PostPropertyPage() {
       setSubmitted(true);
     } catch (err: any) {
       console.error("Post property error:", err);
-      setErrorMessage(err.message || "Failed to publish property. Please check your network connection.");
+      setErrorMessage(
+        err?.code === "permission-denied"
+          ? "Some details could not be accepted. Please check the form and try again."
+          : "Failed to publish property. Please check your network connection."
+      );
     } finally {
       setIsSubmitting(false);
     }

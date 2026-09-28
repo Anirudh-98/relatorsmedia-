@@ -6,13 +6,19 @@ import { useRouter } from "next/navigation";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { realtorsEmployees } from "@/data/portalData";
 import { FaSearch, FaCheckCircle, FaShieldAlt, FaIdCard, FaArrowRight } from "react-icons/fa";
+import { FormError } from "@/components/ui/FormError";
+import { firstFormError, verifyIdSchema } from "@/lib/validation/formSchemas";
 
 export default function VerifyIndexPage() {
   const [searchId, setSearchId] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
   const router = useRouter();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = firstFormError(verifyIdSchema, { searchId });
+    setFormError(validationError);
+    if (validationError) return;
     if (searchId.trim()) {
       router.push(`/verify/${encodeURIComponent(searchId.trim())}`);
     }
@@ -50,6 +56,7 @@ export default function VerifyIndexPage() {
               />
               <FaSearch className="absolute left-3 top-3 text-gray-400 text-sm" />
             </div>
+            <FormError message={formError} />
             <button
               type="submit"
               className="bg-[#073F73] hover:bg-[#06345F] text-white text-[12px] font-black uppercase px-5 py-2 rounded-[3px] transition-colors"

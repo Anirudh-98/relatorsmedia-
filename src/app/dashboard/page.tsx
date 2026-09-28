@@ -8,6 +8,7 @@ import { IdCardModal } from "@/components/ui/IdCardModal";
 import { RealtorsMediaEmployee } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { loginMember } from "@/lib/firebase/auth";
+import { firstFormError, loginSchema } from "@/lib/validation/formSchemas";
 import {
   FaIdCard,
   FaCheckCircle,
@@ -35,15 +36,19 @@ export default function DashboardPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    const validationError = firstFormError(loginSchema, { email: loginEmail, password: loginPassword });
+    setLoginError(validationError);
+    if (validationError) return;
     setLoginLoading(true);
-    setLoginError(null);
     try {
       await loginMember(loginEmail.trim(), loginPassword);
       await refreshProfile();
     } catch (err: any) {
       console.error("Dashboard login error:", err);
       let msg = "Invalid email or password. Please try again.";
-      if (err.code === "auth/user-not-found") {
+      if (err.code === "auth/too-many-requests") {
+        msg = "Too many failed attempts. Please wait a moment and try again.";
+      } else if (err.code === "auth/user-not-found") {
         msg = "No user found with this email. Please register first.";
       } else if (err.code === "auth/wrong-password") {
         msg = "Incorrect password. Please try again.";

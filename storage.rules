@@ -1,22 +1,39 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Member photos: public read for ID cards and QR verification, max 10MB image uploads
-    match /members/{allPaths=**} {
-      allow read: if true;
-      allow write: if request.resource == null || (
-        request.resource.size < 10 * 1024 * 1024 &&
-        request.resource.contentType.matches('image/.*')
-      );
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'admin@realtorsmedia.com';
     }
-    
-    // Property images: public read, max 15MB image uploads
+
+    // Active ID card issuer (see `staff` in firestore.rules)
+    function isIssuer() {
+      let staffPath = /databases/(default)/documents/staff/$(request.auth.uid);
+      return request.auth != null && firestore.exists(staffPath) && firestore.get(staffPath).data.active == true;
+    }
+
+    // Raster images only: SVG can carry scripts
+    function isImageUnder(maxBytes) {
+      return request.resource.size < maxBytes
+        && request.resource.contentType.matches('image/.*')
+        && !request.resource.contentType.matches('image/svg.*');
+    }
+
+    // ID card photos: `members/{uid}/...` for members, `members/employee_{id}/...` for employee cards.
+    // Public read for ID cards and QR verification; files are never overwritten or deleted except by the admin
+    match /members/{ownerId}/{allPaths=**} {
+      allow read: if true;
+      allow create: if isImageUnder(10 * 1024 * 1024) && (
+        (request.auth != null && request.auth.uid == ownerId)
+        || (ownerId.matches('employee_.*') && (isAdmin() || isIssuer()))
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // Property images: guests may post listings, so uploads are open but create-only
     match /properties/{allPaths=**} {
       allow read: if true;
-      allow write: if request.resource == null || (
-        request.resource.size < 15 * 1024 * 1024 &&
-        request.resource.contentType.matches('image/.*')
-      );
+      allow create: if isImageUnder(15 * 1024 * 1024);
+      allow update, delete: if isAdmin();
     }
 
     // Default deny for all other paths

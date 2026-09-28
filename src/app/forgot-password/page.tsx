@@ -5,6 +5,7 @@ import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { FaLock, FaCheckCircle, FaArrowLeft, FaPhoneAlt, FaExclamationTriangle, FaSpinner } from "react-icons/fa";
 import { resetMemberPassword } from "@/lib/firebase/auth";
+import { firstFormError, forgotPasswordSchema } from "@/lib/validation/formSchemas";
 
 // "rohan.d@gmail.com" -> "ro*****@gmail.com"
 const maskEmail = (email: string) => {
@@ -23,6 +24,13 @@ export default function ForgotPasswordPage() {
   const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
+
+    const validationError = firstFormError(forgotPasswordSchema, { identifier });
+    if (validationError) {
+      setErrorMessage(validationError);
+      return;
+    }
+
     setLoading(true);
 
     try {
