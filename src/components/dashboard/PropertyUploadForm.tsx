@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   FaPlusCircle,
@@ -101,13 +101,36 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
     facing: "East",
     reraNumber: "",
     googleMapUrl: "",
-    name: memberProfile?.fullName || user?.displayName || "",
-    phone: memberProfile?.phone || "",
-    email: user?.email || "",
-    role: "Verified Member Realtor",
-    agencyName: memberProfile?.agencyName || "",
+    name: memberProfile?.fullName || user?.displayName || (isAdminMode ? "Admin Office" : ""),
+    phone: memberProfile?.phone || (isAdminMode ? "+91 98900 00000" : ""),
+    email: user?.email || memberProfile?.email || (isAdminMode ? "admin@realtorsmedia.com" : ""),
+    role: isAdminMode ? "Official Administrator" : "Verified Member Realtor",
+    agencyName: memberProfile?.agencyName || (isAdminMode ? "Realtors Media Network" : ""),
     description: "",
   });
+
+  // Keep contact details synced when user/profile or adminMode resolves
+  useEffect(() => {
+    if (isAdminMode) {
+      setFormData((prev) => ({
+        ...prev,
+        email: prev.email || "admin@realtorsmedia.com",
+        name: prev.name || "Admin Office",
+        phone: prev.phone || "+91 98900 00000",
+        agencyName: prev.agencyName || "Realtors Media Network",
+        role: "Official Administrator",
+      }));
+    } else if (user || memberProfile) {
+      setFormData((prev) => ({
+        ...prev,
+        email: prev.email || user?.email || memberProfile?.email || "",
+        name: prev.name || memberProfile?.fullName || user?.displayName || "",
+        phone: prev.phone || memberProfile?.phone || "",
+        agencyName: prev.agencyName || memberProfile?.agencyName || "",
+        city: prev.city || memberProfile?.city || "Pune",
+      }));
+    }
+  }, [isAdminMode, user, memberProfile]);
 
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([
     "24/7 Security & CCTV",
@@ -346,11 +369,11 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
       facing: "East",
       reraNumber: "",
       googleMapUrl: "",
-      name: memberProfile?.fullName || user?.displayName || "",
-      phone: memberProfile?.phone || "",
-      email: user?.email || "",
-      role: "Verified Member Realtor",
-      agencyName: memberProfile?.agencyName || "",
+      name: memberProfile?.fullName || user?.displayName || (isAdminMode ? "Admin Office" : ""),
+      phone: memberProfile?.phone || (isAdminMode ? "+91 98900 00000" : ""),
+      email: user?.email || memberProfile?.email || (isAdminMode ? "admin@realtorsmedia.com" : ""),
+      role: isAdminMode ? "Official Administrator" : "Verified Member Realtor",
+      agencyName: memberProfile?.agencyName || (isAdminMode ? "Realtors Media Network" : ""),
       description: "",
     });
     setSelectedImageFiles([]);
@@ -922,11 +945,13 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
           <h3 className="text-xs font-black text-[#073F73] uppercase tracking-wider flex items-center justify-between">
             <span>6. Verified Realtor / Contact Details</span>
             <span className="text-[10px] text-[#168A3A] font-bold">
-              Linked to Member ID: {memberProfile?.employeeId || "Authenticated Member"}
+              {isAdminMode
+                ? "Linked to: Official Admin Account"
+                : `Linked to Member ID: ${memberProfile?.employeeId || "Authenticated Member"}`}
             </span>
           </h3>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <label className="block text-[10.5px] font-bold text-gray-600 uppercase mb-0.5">
                 Contact Name *
@@ -936,6 +961,21 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
                 required
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="e.g. Rahul Sharma"
+                className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:border-[#073F73]"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[10.5px] font-bold text-gray-600 uppercase mb-0.5">
+                Email Address *
+              </label>
+              <input
+                type="email"
+                required
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="e.g. contact@example.com"
                 className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:border-[#073F73]"
               />
             </div>
@@ -949,6 +989,7 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
                 required
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="e.g. +91 98765 43210"
                 className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:border-[#073F73]"
               />
             </div>
