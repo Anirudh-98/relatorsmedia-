@@ -29,11 +29,11 @@ service firebase.storage {
       allow update, delete: if isAdmin();
     }
 
-    // Property images: guests may post listings, so uploads are open but create-only
+    // Property images: members & guests can upload property photos (Max 5MB per photo)
     match /properties/{allPaths=**} {
       allow read: if true;
-      allow create: if isImageUnder(15 * 1024 * 1024);
-      allow update, delete: if isAdmin();
+      allow create, update: if isImageUnder(5 * 1024 * 1024);
+      allow delete: if isAdmin() || request.auth != null;
     }
 
     // Default deny for all other paths

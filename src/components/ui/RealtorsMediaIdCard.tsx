@@ -317,10 +317,14 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
               data-profile-photo="true"
               alt={employee.name || "Member Photo"}
               className="w-full h-full object-cover object-top"
-              crossOrigin={displayPhoto.startsWith("http") ? "anonymous" : undefined}
               loading="eager"
               onError={(e) => {
                 const t = e.currentTarget;
+                if (t.src.includes("/api/proxy-image") && rawPhoto && rawPhoto.startsWith("http")) {
+                  t.removeAttribute("crossorigin");
+                  t.src = rawPhoto;
+                  return;
+                }
                 if (!t.src.includes(PLACEHOLDER_PHOTO)) t.src = PLACEHOLDER_PHOTO;
               }}
             />

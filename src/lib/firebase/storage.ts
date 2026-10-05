@@ -158,7 +158,8 @@ export async function uploadMemberPhoto(
 export async function uploadPropertyImage(
   fileOrDataUrl: File | string,
   propertyId: string,
-  fileName?: string
+  fileName?: string,
+  customStorage?: FirebaseStorage
 ): Promise<string> {
   if (typeof fileOrDataUrl === "string") {
     if (!fileOrDataUrl) return "";
@@ -174,7 +175,7 @@ export async function uploadPropertyImage(
   const fileExt = fileName ? fileName.split(".").pop() : "jpg";
   const uniqueName = `image_${Date.now()}.${fileExt}`;
   const storagePath = `properties/${propertyId}/${uniqueName}`;
-  const storageRef = ref(storage, storagePath);
+  const storageRef = ref(customStorage || storage, storagePath);
 
   let compressedDataUrl = "";
   try {
@@ -204,6 +205,31 @@ export async function uploadPropertyImage(
     contentType: fileOrDataUrl.type || "image/jpeg",
   });
   return await getDownloadURL(storageRef);
+}
+
+/**
+ * Upload multiple property images sequentially to Firebase Storage.
+ * Compresses each image and returns an array of download URLs.
+ */
+export async function uploadPropertyImages(
+  filesOrDataUrls: (File | string)[],
+  propertyId: string,
+  customStorage?: FirebaseStorage
+): Promise<string[]> {
+  const urls: string[] = [];
+  for (let i = 0; i < filesOrDataUrls.length; i++) {
+    const item = filesOrDataUrls[i];
+    try {
+      const fileName = item instanceof File ? item.name : `photo_${i + 1}.jpg`;
+      const url = await uploadPropertyImage(item, propertyId, `${i + 1}_${fileName}`, customStorage);
+      if (url) {
+        urls.push(url);
+      }
+    } catch (err) {
+      console.warn(`Error uploading property image #${i}:`, err);
+    }
+  }
+  return urls;
 }
 
 /**

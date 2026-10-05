@@ -5,7 +5,24 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { PortalLayout } from "@/components/layout/PortalLayout";
-import { FaSearch, FaMapMarkerAlt, FaBed, FaRulerCombined, FaCheckCircle, FaFilter, FaPhoneAlt, FaShieldAlt } from "react-icons/fa";
+import {
+  FaSearch,
+  FaMapMarkerAlt,
+  FaBed,
+  FaRulerCombined,
+  FaCheckCircle,
+  FaFilter,
+  FaPhoneAlt,
+  FaShieldAlt,
+  FaDirections,
+  FaImages,
+  FaSpinner,
+  FaBuilding,
+  FaPlusCircle,
+  FaEye,
+} from "react-icons/fa";
+import { getProperties, PropertyListingData } from "@/lib/firebase/db";
+import { PropertyDetailsModal } from "@/components/properties/PropertyDetailsModal";
 
 interface PropertyListing {
   id: string;
@@ -18,105 +35,14 @@ interface PropertyListing {
   area: string;
   bhk?: string;
   image: string;
+  images?: string[];
+  googleMapUrl?: string;
   verifiedRealtor: string;
   realtorId: string;
   reraNumber?: string;
   postedDate: string;
+  raw: PropertyListingData;
 }
-
-const mockProperties: PropertyListing[] = [
-  {
-    id: "prop1",
-    title: "East-Facing 200 Sq.Yd RERA Villa Plot in Gated County",
-    type: "Plot / Land",
-    category: "open-plots",
-    city: "Hyderabad",
-    location: "Shadnagar Highway Corridor",
-    price: "₹ 26.5 Lakhs",
-    area: "1800 Sq.Ft.",
-    image: "/images/building_watermark.jpg",
-    verifiedRealtor: "Ramnath Kumar",
-    realtorId: "RMD-GRN-014",
-    reraNumber: "P02400033445",
-    postedDate: "Yesterday",
-  },
-  {
-    id: "prop2",
-    title: "Premium 3 BHK High-Rise Flat with Panoramic Balcony",
-    type: "Apartment",
-    category: "apartments",
-    city: "Pune",
-    location: "Baner Highway Junction, Pune",
-    price: "₹ 1.15 Cr",
-    area: "1480 Sq.Ft.",
-    bhk: "3 BHK",
-    image: "/images/studio_broadcast.jpg",
-    verifiedRealtor: "Rohan Deshmukh",
-    realtorId: "RMD-BLU-001",
-    reraNumber: "P52100045678",
-    postedDate: "2 days ago",
-  },
-  {
-    id: "prop3",
-    title: "Luxury 4 BHK Independent Triplex Villa with Private Garden",
-    type: "Villa",
-    category: "villas",
-    city: "Hyderabad",
-    location: "Mokila / Financial District West",
-    price: "₹ 2.85 Cr",
-    area: "3400 Sq.Ft.",
-    bhk: "4 BHK",
-    image: "/images/studio_broadcast.jpg",
-    verifiedRealtor: "K. Naveen Reddy",
-    realtorId: "RMD-RED-009",
-    reraNumber: "P02500099887",
-    postedDate: "3 days ago",
-  },
-  {
-    id: "prop4",
-    title: "Grade-A Furnished Corporate IT Office Floor",
-    type: "Commercial",
-    category: "commercial",
-    city: "Bengaluru",
-    location: "Outer Ring Road, Marathahalli",
-    price: "₹ 3.40 Cr",
-    area: "2800 Sq.Ft.",
-    image: "/images/building_watermark.jpg",
-    verifiedRealtor: "S. Priya Sharma",
-    realtorId: "RMD-BLU-089",
-    postedDate: "Just now",
-  },
-  {
-    id: "prop5",
-    title: "1-Acre Managed Teakwood & Mango Organic Farm Plot",
-    type: "Farm House",
-    category: "farm-houses",
-    city: "Pune",
-    location: "Kamshet Valley, Pune-Lonavala",
-    price: "₹ 52 Lakhs",
-    area: "43,560 Sq.Ft.",
-    image: "/images/building_watermark.jpg",
-    verifiedRealtor: "Suresh Baburao Shinde",
-    realtorId: "RMD-GRN-042",
-    postedDate: "4 days ago",
-  },
-  {
-    id: "prop6",
-    title: "Ready-to-Move 2 BHK Sunlit Flat with Modular Kitchen",
-    type: "Apartment",
-    category: "apartments",
-    city: "Pune",
-    location: "Wakad, Pune West",
-    price: "₹ 72 Lakhs",
-    area: "980 Sq.Ft.",
-    bhk: "2 BHK",
-    image: "/images/studio_broadcast.jpg",
-    verifiedRealtor: "Rohan Deshmukh",
-    realtorId: "RMD-BLU-001",
-    reraNumber: "P52100088990",
-    postedDate: "5 days ago",
-  },
-];
 
 function PropertiesContent() {
   const searchParams = useSearchParams();
@@ -126,12 +52,54 @@ function PropertiesContent() {
   const [query, setQuery] = useState(queryParam);
   const [selectedCity, setSelectedCity] = useState("All");
   const [selectedType, setSelectedType] = useState("All");
+  const [allProperties, setAllProperties] = useState<PropertyListing[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedProperty, setSelectedProperty] = useState<PropertyListingData | null>(null);
+
+  useEffect(() => {
+    async function fetchLiveProperties() {
+      setLoading(true);
+      try {
+        const live = await getProperties();
+        if (live && live.length > 0) {
+          const transformed: PropertyListing[] = live.map((fp) => ({
+            id: fp.id || `live_${Math.random()}`,
+            title: fp.title,
+            type: fp.propertyType || "Property",
+            category: (fp.propertyType || "").toLowerCase().replace(/[^a-z0-9]/g, "-"),
+            city: fp.city || "India",
+            location: fp.address ? `${fp.locality || ""}, ${fp.city || ""}` : (fp.locality ? `${fp.locality}, ${fp.city}` : fp.city || "India"),
+            price: fp.price,
+            area: fp.area,
+            bhk: fp.bhk && !fp.bhk.includes("Plot") ? fp.bhk : undefined,
+            image: fp.imageUrl || fp.images?.[0] || "/images/building_watermark.jpg",
+            images: fp.images,
+            googleMapUrl: fp.googleMapUrl || fp.mapUrl,
+            verifiedRealtor: fp.name || "Verified Member",
+            realtorId: fp.memberId || "RM-MEMBER",
+            reraNumber: fp.reraNumber,
+            postedDate: "Verified Member Listing",
+            raw: fp,
+          }));
+          setAllProperties(transformed);
+        } else {
+          setAllProperties([]);
+        }
+      } catch (err) {
+        console.warn("Could not fetch live properties:", err);
+        setAllProperties([]);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchLiveProperties();
+  }, []);
 
   useEffect(() => {
     if (queryParam) setQuery(queryParam);
   }, [queryParam]);
 
-  const filtered = mockProperties.filter((p) => {
+  const filtered = allProperties.filter((p) => {
     const matchesQuery =
       query === "" ||
       p.title.toLowerCase().includes(query.toLowerCase()) ||
@@ -139,12 +107,21 @@ function PropertiesContent() {
       p.city.toLowerCase().includes(query.toLowerCase()) ||
       p.type.toLowerCase().includes(query.toLowerCase());
 
-    const matchesCity = selectedCity === "All" || p.city === selectedCity;
-    const matchesType = selectedType === "All" || p.type === selectedType;
-    const matchesCategory = categoryParam === "All" || p.category === categoryParam;
+    const matchesCity = selectedCity === "All" || p.city.toLowerCase() === selectedCity.toLowerCase();
+    const matchesType =
+      selectedType === "All" ||
+      p.type.toLowerCase().includes(selectedType.toLowerCase()) ||
+      selectedType.toLowerCase().includes(p.type.toLowerCase());
+    const matchesCategory =
+      categoryParam === "All" ||
+      p.category === categoryParam ||
+      p.type.toLowerCase().includes(categoryParam.toLowerCase().replace(/-/g, " "));
 
     return matchesQuery && matchesCity && matchesType && matchesCategory;
   });
+
+  // Extract available unique cities from live listings
+  const availableCities = Array.from(new Set(allProperties.map((p) => p.city).filter(Boolean)));
 
   return (
     <div className="space-y-6">
@@ -173,9 +150,14 @@ function PropertiesContent() {
               className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-md px-2 py-1 text-[11px] font-bold text-[#073F73]"
             >
               <option value="All">All Cities</option>
-              <option value="Pune">Pune</option>
-              <option value="Hyderabad">Hyderabad</option>
-              <option value="Bengaluru">Bengaluru</option>
+              {availableCities.map((city) => (
+                <option key={city} value={city}>
+                  {city}
+                </option>
+              ))}
+              {!availableCities.includes("Pune") && <option value="Pune">Pune</option>}
+              {!availableCities.includes("Hyderabad") && <option value="Hyderabad">Hyderabad</option>}
+              {!availableCities.includes("Bengaluru") && <option value="Bengaluru">Bengaluru</option>}
             </select>
           </div>
 
@@ -187,15 +169,18 @@ function PropertiesContent() {
               className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-md px-2 py-1 text-[11px] font-bold text-[#073F73]"
             >
               <option value="All">All Types</option>
-              <option value="Plot / Land">Plots & Land</option>
-              <option value="Apartment">Flats / Apartments</option>
-              <option value="Villa">Luxury Villas</option>
-              <option value="Commercial">Commercial</option>
-              <option value="Farm House">Farm Houses</option>
+              <option value="Apartments / Flats">Flats / Apartments</option>
+              <option value="Open Plots">Open Plots</option>
+              <option value="Gated Villa Plots">Gated Villa Plots</option>
+              <option value="Luxury Villas">Luxury Villas</option>
+              <option value="Independent Houses">Independent Houses</option>
+              <option value="Commercial Plots / Offices">Commercial</option>
+              <option value="Farm Houses / Agriculture">Farm Houses / Agriculture</option>
+              <option value="Industrial / Warehouses">Industrial / Warehouses</option>
             </select>
           </div>
 
-          {(query || selectedCity !== "All" || selectedType !== "All") && (
+          {(query || selectedCity !== "All" || selectedType !== "All" || categoryParam !== "All") && (
             <button
               type="button"
               onClick={() => {
@@ -203,9 +188,9 @@ function PropertiesContent() {
                 setSelectedCity("All");
                 setSelectedType("All");
               }}
-              className="text-[10.5px] font-bold text-[#E21F2F] hover:underline"
+              className="text-[10.5px] font-bold text-[#E21F2F] hover:underline cursor-pointer"
             >
-              Reset
+              Reset Filters
             </button>
           )}
         </div>
@@ -214,21 +199,55 @@ function PropertiesContent() {
       {/* Properties Count */}
       <div className="flex items-center justify-between text-[12px] font-bold text-[#64748B]">
         <span>
-          Showing <strong className="text-[#073F73] font-black">{filtered.length}</strong> Verified Properties
+          Showing <strong className="text-[#073F73] font-black">{filtered.length}</strong> Real Member Properties
         </span>
         <Link
-          href="/post-property"
-          className="text-[#E21F2F] hover:underline flex items-center gap-1 text-[11.5px]"
+          href="/dashboard?tab=upload"
+          className="text-[#168A3A] font-black hover:underline flex items-center gap-1 text-[11.5px]"
         >
-          <span>Have a property to sell or rent? Post it for Free →</span>
+          <FaPlusCircle />
+          <span>Upload Property from Member Dashboard →</span>
         </Link>
       </div>
 
-      {/* Property Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {filtered.map((prop) => (
-          <div
-            key={prop.id}
+      {/* Realtime Loading State */}
+      {loading ? (
+        <div className="bg-white rounded-xl border border-[#CBD5E1] p-16 text-center shadow-2xs flex flex-col items-center justify-center gap-3">
+          <FaSpinner className="text-3xl text-[#073F73] animate-spin" />
+          <p className="text-sm font-bold text-[#073F73]">Loading real member properties from database...</p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-xl border border-[#CBD5E1] p-12 text-center shadow-2xs space-y-4 max-w-md mx-auto">
+          <div className="w-16 h-16 rounded-full bg-[#EEF6FC] text-[#073F73] flex items-center justify-center mx-auto text-2xl border border-[#CBD5E1]">
+            <FaBuilding />
+          </div>
+          <div>
+            <h3 className="text-lg font-black text-[#073F73]">
+              {allProperties.length === 0
+                ? "No Properties Uploaded Yet"
+                : "No Properties Match Your Filter"}
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+              {allProperties.length === 0
+                ? "Properties uploaded by members from their dashboard will appear here in real-time with verified photos and Google Maps navigation."
+                : "Try resetting your search query or city / category filters."}
+            </p>
+          </div>
+          <div className="flex justify-center gap-2 pt-2">
+            <Link
+              href="/dashboard?tab=upload"
+              className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-5 py-2.5 rounded-md transition-colors shadow-xs inline-flex items-center gap-1.5"
+            >
+              <FaPlusCircle />
+              <span>Upload Property as Member</span>
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filtered.map((prop) => (
+            <div
+              key={prop.id}
             className="bg-white border border-[#CBD5E1] rounded-xl overflow-hidden shadow-2xs hover:shadow-md transition-shadow flex flex-col justify-between group"
           >
             <div>
@@ -237,6 +256,7 @@ function PropertiesContent() {
                   src={prop.image}
                   alt={prop.title}
                   fill
+                  unoptimized
                   className="object-cover group-hover:scale-105 transition-transform duration-300"
                 />
                 <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
@@ -249,6 +269,13 @@ function PropertiesContent() {
                     </span>
                   )}
                 </div>
+
+                {prop.images && prop.images.length > 1 && (
+                  <span className="absolute top-2.5 right-2.5 bg-black/60 backdrop-blur-xs text-white text-[9px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <FaImages className="text-[8px]" />
+                    <span>{prop.images.length} Photos</span>
+                  </span>
+                )}
 
                 <div className="absolute bottom-2.5 left-2.5 bg-white/95 backdrop-blur-xs text-[#073F73] text-[14px] font-black px-2.5 py-0.5 rounded-md shadow-xs">
                   {prop.price}
@@ -291,25 +318,50 @@ function PropertiesContent() {
             </div>
 
             <div className="p-4 pt-0 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedProperty(prop.raw)}
+                className="flex-1 bg-[#073F73] hover:bg-[#06345F] text-white text-[11px] font-black py-2 rounded-md uppercase tracking-wider text-center transition-colors shadow-2xs flex items-center justify-center gap-1 cursor-pointer"
+              >
+                <FaEye className="text-xs" />
+                <span>View Details</span>
+              </button>
+              {prop.googleMapUrl && (
+                <a
+                  href={
+                    prop.googleMapUrl.startsWith("http")
+                      ? prop.googleMapUrl
+                      : `https://${prop.googleMapUrl}`
+                  }
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-[#EEF6FC] hover:bg-[#E0EFFC] text-[#073F73] text-[10.5px] font-black py-2 px-2.5 rounded-md border border-[#A5CEE8] transition-colors flex items-center gap-1 shadow-2xs whitespace-nowrap"
+                  title="Navigate with Google Maps"
+                >
+                  <FaDirections className="text-[#168A3A] text-sm" />
+                  <span>Navigate</span>
+                </a>
+              )}
               <Link
                 href={`/contact?prop=${encodeURIComponent(prop.title)}`}
-                className="flex-1 bg-[#073F73] hover:bg-[#06345F] text-white text-[11px] font-black py-2 rounded-md uppercase tracking-wider text-center transition-colors shadow-2xs"
+                className="bg-[#F1F5F9] hover:bg-gray-200 text-[#073F73] text-[10.5px] font-bold py-2 px-2.5 rounded-md transition-colors whitespace-nowrap"
+                title="Contact Realtor"
               >
-                Contact Realtor
-              </Link>
-              <Link
-                href={`/verify/${prop.realtorId}`}
-                className="bg-[#F1F5F9] hover:bg-gray-200 text-[#073F73] text-[10.5px] font-bold py-2 px-2.5 rounded-md transition-colors"
-                title="Verify Realtor ID"
-              >
-                ID Check
+                Inquire
               </Link>
             </div>
           </div>
         ))}
       </div>
-    </div>
-  );
+    )}
+
+    {/* Full Property Details Modal */}
+    <PropertyDetailsModal
+      property={selectedProperty}
+      onClose={() => setSelectedProperty(null)}
+    />
+  </div>
+);
 }
 
 export default function PropertiesPage() {

@@ -3,15 +3,20 @@
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  FaBuilding,
+  FaDirections,
   FaExclamationTriangle,
+  FaEye,
   FaIdCard,
   FaKey,
   FaLock,
+  FaPlusCircle,
   FaSearch,
   FaSignOutAlt,
   FaSpinner,
   FaSyncAlt,
   FaTimes,
+  FaTrash,
   FaUserShield,
   FaUserTie,
 } from "react-icons/fa";
@@ -24,7 +29,15 @@ import {
   setIssuerActive,
   StaffRecord,
 } from "@/lib/firebase/staff";
-import { IdCardRecordData } from "@/lib/firebase/db";
+import {
+  IdCardRecordData,
+  PropertyListingData,
+  getAllPropertiesAdmin,
+  deletePropertyListing,
+  updatePropertyListing,
+} from "@/lib/firebase/db";
+import { PropertyUploadForm } from "@/components/dashboard/PropertyUploadForm";
+import { PropertyDetailsModal } from "@/components/properties/PropertyDetailsModal";
 import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
 import { firstFormError, issuerAccountSchema } from "@/lib/validation/formSchemas";
 import { PASSWORD_HINT, PASSWORD_MAX_LENGTH } from "@/lib/validation/idCardSchemas";
@@ -120,12 +133,16 @@ function AdminSignIn({ onSignedIn }: { onSignedIn: () => void }) {
   );
 }
 
-type Tab = "memberCards" | "employeeCards";
+type Tab = "memberCards" | "employeeCards" | "properties";
 type DetailRecord = { title: string; photo?: string; data: Record<string, unknown> };
 
 function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [cards, setCards] = useState<IdCardRecordData[]>([]);
   const [issuers, setIssuers] = useState<StaffRecord[]>([]);
+  const [properties, setProperties] = useState<PropertyListingData[]>([]);
+  const [showPropertyUpload, setShowPropertyUpload] = useState(false);
+  const [selectedPropertyModal, setSelectedPropertyModal] = useState<PropertyListingData | null>(null);
+  const [deletingPropId, setDeletingPropId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("memberCards");
@@ -135,9 +152,14 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const load = useCallback(async () => {
     const { db } = getAdminFirebase();
     try {
-      const [c, i] = await Promise.all([listAllIdCards(db), listIssuers(db)]);
+      const [c, i, p] = await Promise.all([
+        listAllIdCards(db),
+        listIssuers(db),
+        getAllPropertiesAdmin(db),
+      ]);
       setCards(c);
       setIssuers(i);
+      setProperties(p);
       setLoadError(null);
     } catch (err) {
       console.error("Admin dashboard load error:", err);
@@ -150,10 +172,11 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => {
     // Initial load; state is only set from the async callback
     const { db } = getAdminFirebase();
-    Promise.all([listAllIdCards(db), listIssuers(db)])
-      .then(([c, i]) => {
+    Promise.all([listAllIdCards(db), listIssuers(db), getAllPropertiesAdmin(db)])
+      .then(([c, i, p]) => {
         setCards(c);
         setIssuers(i);
+        setProperties(p);
       })
       .catch((err) => {
         console.error("Admin dashboard load error:", err);
@@ -172,13 +195,44 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const filteredMemberCards = memberCards.filter(cardMatches);
   const filteredEmployeeCards = employeeCards.filter(cardMatches);
 
+  const propertyMatches = (p: PropertyListingData) =>
+    matches(p.title, p.city, p.locality, p.propertyType, p.bhk, p.name, p.phone, p.reraNumber, p.status, p.price);
+  const filteredProperties = properties.filter(propertyMatches);
+
+  const handleDeleteProperty = async (id?: string) => {
+    if (!id) return;
+    if (!confirm("Are you sure you want to permanently delete this property listing?")) return;
+    setDeletingPropId(id);
+    try {
+      const { db } = getAdminFirebase();
+      await deletePropertyListing(id, db);
+      setProperties((prev) => prev.filter((p) => p.id !== id));
+    } catch (err) {
+      console.error("Error deleting property:", err);
+      alert("Failed to delete property. Check network and rules.");
+    } finally {
+      setDeletingPropId(null);
+    }
+  };
+
   const activeIssuer = issuers.find((i) => i.active) || null;
 
   return (
     <div className="space-y-5">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setTab("properties");
+              setShowPropertyUpload(true);
+            }}
+            className="px-3.5 py-1.5 bg-[#168A3A] hover:bg-[#126f2f] text-white text-[11px] font-black uppercase rounded-md flex items-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+          >
+            <FaPlusCircle className="text-[10px]" />
+            <span>+ Add Property</span>
+          </button>
           <Link
             href="/employee"
             className="px-3 py-1.5 bg-white border border-[#CBD5E1] hover:bg-gray-50 text-[#073F73] text-[11px] font-bold rounded-md flex items-center gap-1.5"
@@ -212,10 +266,13 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
         <StatTile icon={<FaIdCard />} label="Total ID Cards" value={cards.length} loading={loading} />
         <StatTile icon={<FaIdCard />} label="Member Cards" value={memberCards.length} loading={loading} />
         <StatTile icon={<FaUserTie />} label="Employee Cards" value={employeeCards.length} loading={loading} />
+        <div onClick={() => setTab("properties")} className="cursor-pointer">
+          <StatTile icon={<FaBuilding />} label="Portal Properties" value={properties.length} loading={loading} />
+        </div>
       </div>
 
       <IssuerLoginPanel activeIssuer={activeIssuer} loading={loading} onChanged={load} />
@@ -229,6 +286,12 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
             </TabButton>
             <TabButton active={tab === "employeeCards"} onClick={() => setTab("employeeCards")}>
               Employee ID Cards ({employeeCards.length})
+            </TabButton>
+            <TabButton active={tab === "properties"} onClick={() => setTab("properties")}>
+              <span className="flex items-center gap-1.5">
+                <FaBuilding className="text-xs" />
+                <span>Properties Portal ({properties.length})</span>
+              </span>
             </TabButton>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -271,7 +334,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
               onClick: () => setDetail(cardDetail(c)),
             }))}
           />
-        ) : (
+        ) : tab === "employeeCards" ? (
           <RecordTable
             empty="No employee ID cards found."
             headers={["", "Name", "Employee ID", "Position", "Department", "Phone", "Email", "Branch", "Issued", "Status", "Issued By"]}
@@ -293,10 +356,128 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
               onClick: () => setDetail(cardDetail(c)),
             }))}
           />
+        ) : (
+          <div className="space-y-4">
+            <div className="p-4 bg-[#F8FAFC] border-b border-[#CBD5E1] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-black text-[#073F73] uppercase tracking-wide flex items-center gap-2">
+                  <FaBuilding className="text-[#073F73]" />
+                  <span>Properties Management & Upload Portal</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Administrator exclusive access: Upload verified real estate listings with up to 5 photos, Google Maps navigation links, and full property specifications.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPropertyUpload(!showPropertyUpload)}
+                className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-4 py-2.5 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
+              >
+                <FaPlusCircle />
+                <span>{showPropertyUpload ? "Close Upload Form" : "+ Add New Property"}</span>
+              </button>
+            </div>
+
+            {showPropertyUpload && (
+              <div className="p-4 bg-gray-50 border-b border-[#CBD5E1]">
+                <PropertyUploadForm
+                  customDb={getAdminFirebase().db}
+                  customStorage={getAdminFirebase().storage}
+                  isAdminMode={true}
+                  onSuccess={() => {
+                    setShowPropertyUpload(false);
+                    load();
+                  }}
+                  onCancel={() => setShowPropertyUpload(false)}
+                />
+              </div>
+            )}
+
+            {properties.length === 0 && !showPropertyUpload && (
+              <div className="p-10 text-center bg-white rounded-lg border border-dashed border-[#CBD5E1] m-4 space-y-3">
+                <div className="w-14 h-14 rounded-full bg-[#E7F6EA] text-[#168A3A] flex items-center justify-center mx-auto text-2xl">
+                  <FaBuilding />
+                </div>
+                <h4 className="text-base font-black text-[#073F73]">No Properties Listed in Database</h4>
+                <p className="text-xs text-gray-500 max-w-md mx-auto">
+                  As administrator, you have exclusive permission to publish verified real estate listings with up to 5 photographs and Google Maps navigation links.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setShowPropertyUpload(true)}
+                  className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-5 py-2.5 rounded-md inline-flex items-center gap-2 cursor-pointer shadow-xs transition-colors"
+                >
+                  <FaPlusCircle />
+                  <span>+ Add Property Now</span>
+                </button>
+              </div>
+            )}
+
+            <RecordTable
+              empty={
+                properties.length === 0
+                  ? "No properties posted yet. Click '+ Add New Property' to create the first listing."
+                  : "No properties found matching your search filter."
+              }
+              headers={["", "Title", "Type", "City / Locality", "Price", "Contact Person", "Phone", "Map", "Status", "Actions"]}
+              rows={filteredProperties.map((p) => ({
+                key: p.id || Math.random().toString(),
+                photo: p.imageUrl || p.images?.[0] || "/images/building_watermark.jpg",
+                cells: [
+                  p.title,
+                  `${p.propertyType}${p.bhk && p.bhk !== "N/A (Plot / Land)" ? ` • ${p.bhk}` : ""}`,
+                  `${p.locality ? `${p.locality}, ` : ""}${p.city}`,
+                  p.price,
+                  p.name,
+                  p.phone,
+                  p.googleMapUrl ? (
+                    <a
+                      href={p.googleMapUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0284C7] hover:underline flex items-center gap-1 font-bold text-[11px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <FaDirections /> Maps
+                    </a>
+                  ) : "—",
+                  <StatusBadge key="status" status={p.status} />,
+                  <div key="actions" className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPropertyModal(p)}
+                      className="p-1.5 text-[#073F73] hover:bg-sky-50 rounded cursor-pointer"
+                      title="View Details"
+                    >
+                      <FaEye className="text-xs" />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deletingPropId === p.id}
+                      onClick={() => handleDeleteProperty(p.id)}
+                      className="p-1.5 text-red-600 hover:bg-red-50 rounded cursor-pointer disabled:opacity-50"
+                      title="Delete Listing"
+                    >
+                      <FaTrash className="text-xs" />
+                    </button>
+                  </div>,
+                ],
+                onClick: () => setSelectedPropertyModal(p),
+              }))}
+            />
+          </div>
         )}
       </div>
 
       {detail && <DetailsDialog record={detail} onClose={() => setDetail(null)} />}
+
+      {selectedPropertyModal && (
+        <PropertyDetailsModal
+          property={selectedPropertyModal}
+          isOpen={true}
+          onClose={() => setSelectedPropertyModal(null)}
+        />
+      )}
     </div>
   );
 }

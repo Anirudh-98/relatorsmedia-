@@ -6,6 +6,7 @@ import {
   getDocs,
   addDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -87,9 +88,13 @@ export interface PropertyListingData {
   listingType: string;
   city: string;
   locality: string;
+  address?: string;
   price: string;
   area: string;
   bhk: string;
+  bathrooms?: string;
+  furnishing?: string;
+  facing?: string;
   reraNumber?: string;
   name: string;
   phone: string;
@@ -97,11 +102,18 @@ export interface PropertyListingData {
   role: string;
   description?: string;
   imageUrl?: string;
+  images?: string[];
+  mapUrl?: string;
+  googleMapUrl?: string;
+  memberId?: string;
+  agencyName?: string;
+  amenities?: string[];
   authorUid?: string;
   status: "Active" | "Under Offer" | "Sold";
   views?: number;
   leads?: number;
   createdAt?: Timestamp | any;
+  updatedAt?: Timestamp | any;
 }
 
 export interface LeadInquiryData {
@@ -304,15 +316,50 @@ export async function getIdCardRecord(employeeId: string): Promise<IdCardRecordD
 // Property Listings (Firestore: `properties/{id}`)
 // ----------------------------------------------------
 
-export async function createPropertyListing(listing: PropertyListingData): Promise<string> {
-  const colRef = collection(db, "properties");
-  const docRef = await addDoc(colRef, {
-    ...listing,
+export async function createPropertyListing(listing: PropertyListingData, customDb?: Firestore): Promise<string> {
+  const colRef = collection(customDb || db, "properties");
+  const payload: Record<string, any> = {
+    title: listing.title || "",
+    propertyType: listing.propertyType || "Apartments / Flats",
+    listingType: listing.listingType || "For Sale",
+    city: listing.city || "Pune",
+    locality: listing.locality || "",
+    price: listing.price || "",
+    area: listing.area || "",
+    bhk: listing.bhk || "2 BHK",
+    name: listing.name || "Member",
+    phone: listing.phone || "",
+    email: listing.email || "",
+    role: listing.role || "Owner",
     status: listing.status || "Active",
-    views: listing.views || 1,
-    leads: listing.leads || 0,
+    views: typeof listing.views === "number" ? listing.views : 1,
+    leads: 0,
     createdAt: serverTimestamp(),
-  });
+  };
+
+  // Optional string fields
+  if (listing.address) payload.address = listing.address;
+  if (listing.bathrooms) payload.bathrooms = listing.bathrooms;
+  if (listing.furnishing) payload.furnishing = listing.furnishing;
+  if (listing.facing) payload.facing = listing.facing;
+  if (listing.reraNumber) payload.reraNumber = listing.reraNumber;
+  if (listing.description) payload.description = listing.description;
+  if (listing.imageUrl) payload.imageUrl = listing.imageUrl;
+  if (listing.mapUrl) payload.mapUrl = listing.mapUrl;
+  if (listing.googleMapUrl) payload.googleMapUrl = listing.googleMapUrl;
+  if (listing.memberId) payload.memberId = listing.memberId;
+  if (listing.agencyName) payload.agencyName = listing.agencyName;
+  if (listing.authorUid) payload.authorUid = listing.authorUid;
+
+  // Optional arrays
+  if (Array.isArray(listing.images) && listing.images.length > 0) {
+    payload.images = listing.images.slice(0, 5);
+  }
+  if (Array.isArray(listing.amenities) && listing.amenities.length > 0) {
+    payload.amenities = listing.amenities.slice(0, 30);
+  }
+
+  const docRef = await addDoc(colRef, payload);
   return docRef.id;
 }
 
@@ -348,6 +395,36 @@ export async function getMemberListings(authorUid: string): Promise<PropertyList
     return snap.docs.map((d) => ({ id: d.id, ...d.data() } as PropertyListingData));
   } catch (error) {
     console.warn("Firestore getMemberListings error:", error);
+    return [];
+  }
+}
+
+export async function deletePropertyListing(id: string, customDb?: Firestore): Promise<void> {
+  const docRef = doc(customDb || db, "properties", id);
+  await deleteDoc(docRef);
+}
+
+export async function updatePropertyListing(
+  id: string,
+  data: Partial<PropertyListingData>,
+  customDb?: Firestore
+): Promise<void> {
+  const docRef = doc(customDb || db, "properties", id);
+  await updateDoc(docRef, {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function getAllPropertiesAdmin(customDb?: Firestore): Promise<PropertyListingData[]> {
+  try {
+    const snap = await getDocs(query(collection(customDb || db, "properties"), orderBy("createdAt", "desc"), limit(100)));
+    return snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as PropertyListingData),
+    }));
+  } catch (err) {
+    console.error("Error fetching all properties for admin:", err);
     return [];
   }
 }

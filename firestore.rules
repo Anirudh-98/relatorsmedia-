@@ -4,17 +4,19 @@ service cloud.firestore {
 
     // ========================================================
     // ROLES
-    //   admin  - admin@realtorsmedia.com (manages issuers, sees every card)
+    //   admin  - admin@realtorsmedia.com (manages issuers, properties, sees every card)
     //   issuer - active `staff/{uid}` record created by the admin (employee cards)
     //   member - any signed-in user, limited to their own records
-    //   public - anyone: verification lookups and guest submissions only
+    //   public - anyone: verification lookups and inquiry submissions only
     // ========================================================
     function isAuthenticated() {
       return request.auth != null;
     }
 
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.email == 'admin@realtorsmedia.com';
+      return isAuthenticated()
+        && 'email' in request.auth.token
+        && request.auth.token.email.lower() == 'admin@realtorsmedia.com';
     }
 
     // Active ID card issuer login (created by the admin, see `staff`)
@@ -102,36 +104,35 @@ service cloud.firestore {
 
     // ========================================================
     // 3. PROPERTY LISTINGS (`properties/{propertyId}`)
-    // Guests may post; only the author or the admin may edit or remove
+    // Restricted creation to the Administrator Dashboard ONLY
+    // Public read for marketplace and category browsing
     // ========================================================
     match /properties/{propertyId} {
       allow get, list: if true;
 
-      allow create: if request.resource.data.keys().hasOnly([
-          'title', 'propertyType', 'listingType', 'city', 'locality', 'price', 'area', 'bhk',
-          'reraNumber', 'name', 'phone', 'email', 'role', 'description', 'imageUrl',
-          'authorUid', 'status', 'views', 'leads', 'createdAt'
+      // Only Administrator can create verified properties
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly([
+          'title', 'propertyType', 'listingType', 'city', 'locality', 'address', 'price', 'area', 'bhk',
+          'bathrooms', 'furnishing', 'facing', 'reraNumber', 'name', 'phone', 'email', 'role',
+          'description', 'imageUrl', 'images', 'mapUrl', 'googleMapUrl', 'memberId', 'agencyName',
+          'amenities', 'authorUid', 'status', 'views', 'leads', 'createdAt', 'updatedAt'
         ])
         && isShortString(request.resource.data.title, 200)
         && isShortString(request.resource.data.name, 100)
         && isShortString(request.resource.data.phone, 30)
         && isShortString(request.resource.data.get('description', ''), 5000)
         && isShortString(request.resource.data.get('imageUrl', ''), 2048)
-        && request.resource.data.status == 'Active'
-        && request.resource.data.get('views', 0) is int && request.resource.data.get('views', 0) <= 1
-        && request.resource.data.get('leads', 0) == 0
-        && (
-          (isAuthenticated() && request.resource.data.authorUid == request.auth.uid)
-          || (!isAuthenticated() && request.resource.data.authorUid == 'guest')
-        );
+        && isShortString(request.resource.data.get('googleMapUrl', ''), 2048)
+        && isShortString(request.resource.data.get('mapUrl', ''), 2048)
+        && isShortString(request.resource.data.get('address', ''), 500)
+        && isShortString(request.resource.data.get('memberId', ''), 50)
+        && (!('images' in request.resource.data) || (request.resource.data.images is list && request.resource.data.images.size() <= 5))
+        && (!('amenities' in request.resource.data) || (request.resource.data.amenities is list && request.resource.data.amenities.size() <= 30))
+        && request.resource.data.status in ['Active', 'Under Offer', 'Sold'];
 
-      function isAuthor() {
-        return isAuthenticated()
-          && resource.data.get('authorUid', '') != 'guest'
-          && (request.auth.uid == resource.data.get('authorUid', '') || request.auth.uid == resource.data.get('uid', ''));
-      }
-
-      // Anyone may bump the view / lead counters by one; nothing else
+      // Anyone may bump the view / lead counters by one;
+      // Admin or author member can update/delete
       function isCounterBump() {
         let changed = request.resource.data.diff(resource.data).affectedKeys();
         return changed.hasOnly(['views', 'leads'])
@@ -142,10 +143,11 @@ service cloud.firestore {
       }
 
       allow update: if isAdmin()
-        || (isAuthor() && request.resource.data.authorUid == resource.data.authorUid)
-        || isCounterBump();
+        || isCounterBump()
+        || (isAuthenticated() && resource.data.get('authorUid', '') == request.auth.uid);
 
-      allow delete: if isAdmin() || isAuthor();
+      allow delete: if isAdmin()
+        || (isAuthenticated() && resource.data.get('authorUid', '') == request.auth.uid);
     }
 
     // ========================================================
@@ -176,7 +178,18 @@ service cloud.firestore {
     }
 
     // ========================================================
-    // 5. SEQUENTIAL ID COUNTERS (`counters/{counterId}`)
+    // 5. CLASSIFIEDS (`classifieds/{adId}`)
+    // Public directory; anyone or members can submit free ads
+    // ========================================================
+    match /classifieds/{adId} {
+      allow get, list: if true;
+      allow create: if isShortString(request.resource.data.get('title', ''), 200)
+        && isShortString(request.resource.data.get('phone', ''), 30);
+      allow update, delete: if isAdmin();
+    }
+
+    // ========================================================
+    // 6. SEQUENTIAL ID COUNTERS (`counters/{counterId}`)
     // Written while a card is issued; can only move forward
     // ========================================================
     match /counters/{counterId} {
@@ -204,7 +217,7 @@ service cloud.firestore {
     }
 
     // ========================================================
-    // 6. ID CARD ISSUER LOGIN (`staff/{uid}`)
+    // 7. ID CARD ISSUER LOGIN (`staff/{uid}`)
     // Managed by the admin from /admin; the issuer can only read its own record
     // ========================================================
     match /staff/{uid} {

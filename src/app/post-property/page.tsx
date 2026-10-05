@@ -69,8 +69,8 @@ export default function PostPropertyPage() {
       setErrorMessage("Please upload a JPG, PNG or WEBP photo.");
       return;
     }
-    if (selectedImageFile && selectedImageFile.size > 15 * 1024 * 1024) {
-      setErrorMessage("Property photo must be smaller than 15 MB.");
+    if (selectedImageFile && selectedImageFile.size > 5 * 1024 * 1024) {
+      setErrorMessage("Property photo must be smaller than 5 MB.");
       return;
     }
 

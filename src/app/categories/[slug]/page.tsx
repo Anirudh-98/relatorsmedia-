@@ -2,7 +2,18 @@ import React from "react";
 import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { propertyCategories } from "@/data/portalData";
-import { FaCheckCircle, FaMapMarkerAlt, FaFilter, FaPlusSquare } from "react-icons/fa";
+import {
+  FaCheckCircle,
+  FaMapMarkerAlt,
+  FaFilter,
+  FaPlusSquare,
+  FaDirections,
+  FaBuilding,
+  FaShieldAlt,
+  FaImages,
+} from "react-icons/fa";
+import { getProperties, PropertyListingData } from "@/lib/firebase/db";
+import { CategoryListingsView } from "@/components/properties/CategoryListingsView";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -20,29 +31,36 @@ export default async function CategoryDetailPage({ params }: PageProps) {
     iconColor: "#073F73",
   };
 
-  const sampleListings = [
-    {
-      title: `RERA-Approved Premium ${category.title} Venture`,
-      location: "Growth Corridor, Pune / Hyderabad Highway",
-      price: "₹ 35 Lakhs Onwards*",
-      realtor: "Rohan Deshmukh (RMD-BLU-001)",
-      status: "Ready for Registration",
-    },
-    {
-      title: `Prime Highway Facing Gated ${category.title}`,
-      location: "Near International Airport Zone",
-      price: "₹ 75 Lakhs Onwards*",
-      realtor: "Ramnath Kumar (RMD-GRN-014)",
-      status: "Direct Developer Allocation",
-    },
-    {
-      title: `Corner Bit Luxury ${category.title} Scheme`,
-      location: "West Metropolitan Growth Belt",
-      price: "₹ 1.20 Cr Onwards*",
-      realtor: "S. Priya Sharma (RMD-BLU-089)",
-      status: "Limited Units Available",
-    },
-  ];
+  const allListings = await getProperties().catch(() => []);
+  const matchingListings = allListings.filter((p) => {
+    const pType = (p.propertyType || "").toLowerCase();
+    const cTitle = category.title.toLowerCase();
+    const cSlug = slug.toLowerCase();
+    return (
+      pType.includes(cTitle) ||
+      cTitle.includes(pType) ||
+      pType.replace(/[^a-z0-9]/g, "-") === cSlug ||
+      pType.replace(/[^a-z0-9]/g, "").includes(cSlug.replace(/[^a-z0-9]/g, ""))
+    );
+  });
+
+  // Firestore Timestamps are class instances and can't cross the Server -> Client boundary
+  const toMillis = (value: unknown): number | null =>
+    typeof (value as { toMillis?: unknown })?.toMillis === "function"
+      ? (value as { toMillis: () => number }).toMillis()
+      : null;
+  const serializableListings: PropertyListingData[] = matchingListings.map((p) => ({
+    ...p,
+    createdAt: toMillis(p.createdAt),
+    updatedAt: toMillis(p.updatedAt),
+  }));
+
+  const getCleanMapUrl =(url?: string) => {
+    if (!url) return "";
+    const trimmed = url.trim();
+    if (!trimmed) return "";
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  };
 
   return (
     <PortalLayout
@@ -55,11 +73,11 @@ export default async function CategoryDetailPage({ params }: PageProps) {
       ]}
       action={
         <Link
-          href="/post-property"
-          className="bg-[#E21F2F] hover:bg-[#F11D32] text-white text-[11px] font-black px-3 py-1.5 rounded-md uppercase tracking-wider transition-colors shadow-2xs flex items-center gap-1.5"
+          href="/dashboard?tab=upload"
+          className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-[11px] font-black px-3 py-1.5 rounded-md uppercase tracking-wider transition-colors shadow-2xs flex items-center gap-1.5"
         >
           <FaPlusSquare />
-          <span>Post In This Category</span>
+          <span>Upload Property In This Category</span>
         </Link>
       }
     >
@@ -74,7 +92,7 @@ export default async function CategoryDetailPage({ params }: PageProps) {
               Browse Authenticated {category.title}
             </h2>
             <p className="text-[13px] text-[#475569] leading-relaxed">
-              All properties listed under {category.title} undergo preliminary title verification, RERA layout check, and certified surveyor boundary demarcation.
+              All properties listed under {category.title} are uploaded by authenticated members and include photographs and Google Maps navigation.
             </p>
           </div>
 
@@ -95,58 +113,11 @@ export default async function CategoryDetailPage({ params }: PageProps) {
         </div>
 
         {/* Listings in this category */}
-        <div>
-          <h3 className="text-[16px] font-black text-[#073F73] mb-3 uppercase tracking-tight">
-            Curated Listings in {category.title}
-          </h3>
-          <div className="space-y-3">
-            {sampleListings.map((item, idx) => (
-              <div
-                key={idx}
-                className="bg-white border border-[#CBD5E1] rounded-xl p-5 shadow-2xs hover:shadow-md transition-shadow flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-              >
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="bg-[#E7F6EA] text-[#168A3A] text-[9.5px] font-black px-2 py-0.5 rounded-full border border-[#A3D9B1]">
-                      {item.status}
-                    </span>
-                    <span className="text-[#E21F2F] font-black text-[13px]">
-                      {item.price}
-                    </span>
-                  </div>
-
-                  <h4 className="text-[15px] font-black text-[#073F73]">
-                    {item.title}
-                  </h4>
-
-                  <div className="flex items-center gap-1 text-[11.5px] text-[#64748B] font-semibold">
-                    <FaMapMarkerAlt className="text-[#0B4F8A]" />
-                    <span>{item.location}</span>
-                  </div>
-
-                  <div className="text-[11px] text-[#475569] font-medium pt-1">
-                    Certified Broker: <strong className="text-[#0C1E36]">{item.realtor}</strong>
-                  </div>
-                </div>
-
-                <div className="flex sm:flex-col items-center gap-2 flex-shrink-0">
-                  <Link
-                    href={`/contact?subject=${encodeURIComponent(item.title)}`}
-                    className="bg-[#073F73] hover:bg-[#06345F] text-white text-[11px] font-extrabold px-4 py-2 rounded-md transition-colors shadow-2xs w-full text-center"
-                  >
-                    Contact Realtor
-                  </Link>
-                  <Link
-                    href="/classifieds"
-                    className="bg-white border border-[#CBD5E1] hover:bg-gray-50 text-[#073F73] text-[10.5px] font-bold px-4 py-1.5 rounded-md transition-colors w-full text-center"
-                  >
-                    View in Hub
-                  </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+        <CategoryListingsView
+          categoryTitle={category.title}
+          categorySlug={slug}
+          listings={serializableListings}
+        />
       </div>
     </PortalLayout>
   );

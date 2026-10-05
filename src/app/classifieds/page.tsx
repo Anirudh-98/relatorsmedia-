@@ -7,6 +7,9 @@ import { PortalLayout } from "@/components/layout/PortalLayout";
 import { realEstateHubItems } from "@/data/portalData";
 import { FaFolder, FaSearch, FaMapMarkerAlt, FaPhoneAlt, FaCheckCircle, FaPlusSquare, FaFilter } from "react-icons/fa";
 
+import { PostAdModal } from "@/components/Classifieds/PostAdModal";
+import { ClassifiedAd as PostModalAd } from "@/data/classifiedsData";
+
 interface ClassifiedAd {
   id: string;
   categoryId: string;
@@ -20,104 +23,14 @@ interface ClassifiedAd {
   price?: string;
 }
 
-const mockAds: ClassifiedAd[] = [
-  {
-    id: "ad1",
-    categoryId: "1",
-    categoryTitle: "Area wise Realtors (B & D)",
-    title: "Authorized RERA Realtor for Baner & Balewadi Luxury Apartments",
-    name: "Deshmukh Realty Associates",
-    location: "Baner, Pune",
-    phone: "+91 97654 32109",
-    badge: "Verified Broker",
-    description: "Specialized in 2, 3 & 4 BHK luxury resale and developer inventory with zero litigation guarantee.",
-  },
-  {
-    id: "ad2",
-    categoryId: "1",
-    categoryTitle: "Area wise Realtors (B & D)",
-    title: "Prime Gachibowli & Kokapet Commercial Space Aggregator",
-    name: "Capital Channel Partners",
-    location: "Gachibowli, Hyderabad",
-    phone: "+91 99887 76655",
-    badge: "VIP Agency",
-    description: "Exclusive corporate leasing and bare-shell IT office floors from 5,000 to 50,000 sq.ft.",
-  },
-  {
-    id: "ad3",
-    categoryId: "2",
-    categoryTitle: "CM Enggs & Contractors",
-    title: "Turnkey Civil Construction & Structural Engineering Contractors",
-    name: "Apex BuildTech Infrastructure",
-    location: "Hadapsar, Pune",
-    phone: "+91 98220 33445",
-    badge: "Govt. Registered",
-    description: "Quality residential bungalow and multi-story RCC building construction with 10-year warranty.",
-  },
-  {
-    id: "ad4",
-    categoryId: "3",
-    categoryTitle: "Builders & Developers",
-    title: "20-Acre RERA & PMRDA Sanctioned Open Plot Gated Community",
-    name: "Green Corridors Township LLP",
-    location: "Shadnagar Highway Corridor",
-    phone: "+91 94480 11223",
-    badge: "Direct Developer",
-    description: "Ready for construction with grand arch, clubhouse, underground electricity, and 40ft roads.",
-    price: "₹ 18,000 / Sq.Yd.",
-  },
-  {
-    id: "ad5",
-    categoryId: "4",
-    categoryTitle: "Architects & Planners",
-    title: "Vastu-Compliant 3D Villa Elevations & Municipal Sanction Drawings",
-    name: "Studio Vastu & Design Architects",
-    location: "Kothrud, Pune",
-    phone: "+91 98201 44556",
-    badge: "COA Certified",
-    description: "Complete architectural blueprints, interior styling, landscape planning, and structural stability audits.",
-  },
-  {
-    id: "ad6",
-    categoryId: "5",
-    categoryTitle: "Interior Designers",
-    title: "Premium Modular Kitchens, Wardrobes & Complete Home Interiors",
-    name: "Urban Living Interiors",
-    location: "Whitefield, Bengaluru",
-    phone: "+91 97400 99887",
-    badge: "Verified Studio",
-    description: "Factory-finish marine ply modular designs delivered and installed in 45 days with 10-year warranty.",
-  },
-  {
-    id: "ad7",
-    categoryId: "6",
-    categoryTitle: "Construction Materials",
-    title: "Wholesale TMT 550D Steel & Grade-53 OPC Cement Direct Dispatch",
-    name: "National Building Materials Depo",
-    location: "Secunderabad, Hyderabad",
-    phone: "+91 98490 22334",
-    badge: "Direct Factory",
-    description: "Authorized distributor of Tata Tiscon, JSW Steel, and UltraTech Cement for major project sites.",
-  },
-  {
-    id: "ad8",
-    categoryId: "9",
-    categoryTitle: "Technicians (Electricians, Carpenters, Plumbers)",
-    title: "Certified Building Maintenance & Plumbing Contracting Squad",
-    name: "Reliable Facility Technicians",
-    location: "Wakad, Pune",
-    phone: "+91 93250 88776",
-    badge: "Verified Agency",
-    description: "Rapid on-call plumbing, high-voltage electrical rewiring, and society water pipeline maintenance.",
-  },
-];
-
 function ClassifiedsContent() {
   const searchParams = useSearchParams();
   const categoryParam = searchParams.get("category");
 
   const [selectedCategory, setSelectedCategory] = useState<string>(categoryParam || "All");
   const [searchTerm, setSearchTerm] = useState<string>("");
+  const [ads, setAds] = useState<ClassifiedAd[]>([]);
+  const [isPostModalOpen, setIsPostModalOpen] = useState(false);
 
   useEffect(() => {
     if (categoryParam) {
@@ -125,7 +38,24 @@ function ClassifiedsContent() {
     }
   }, [categoryParam]);
 
-  const filteredAds = mockAds.filter((ad) => {
+  const handleAdCreated = (newAd: PostModalAd) => {
+    const transformed: ClassifiedAd = {
+      id: newAd.id,
+      categoryId: newAd.categoryId,
+      categoryTitle: newAd.categoryName,
+      title: newAd.title,
+      name: newAd.businessName || newAd.contactPerson,
+      location: `${newAd.location}, ${newAd.city}`,
+      phone: newAd.phone,
+      badge: "Verified Member",
+      description: newAd.description,
+      price: newAd.priceRange,
+    };
+    setAds((prev) => [transformed, ...prev]);
+    setIsPostModalOpen(false);
+  };
+
+  const filteredAds = ads.filter((ad) => {
     const matchesCategory =
       selectedCategory === "All" || ad.categoryId === selectedCategory;
     const matchesSearch =
@@ -152,13 +82,14 @@ function ClassifiedsContent() {
             Browse ads across 15 real estate service verticals or publish your own classified listing to reach thousands of active home buyers.
           </p>
         </div>
-        <Link
-          href="/post-property"
-          className="bg-[#E21F2F] hover:bg-[#F11D32] text-white text-[12px] font-black px-4 py-2.5 rounded-md uppercase tracking-wider flex items-center gap-2 transition-colors shadow-sm flex-shrink-0"
+        <button
+          type="button"
+          onClick={() => setIsPostModalOpen(true)}
+          className="bg-[#E21F2F] hover:bg-[#F11D32] text-white text-[12px] font-black px-4 py-2.5 rounded-md uppercase tracking-wider flex items-center gap-2 transition-colors shadow-sm flex-shrink-0 cursor-pointer"
         >
           <FaPlusSquare />
           <span>Post Your Free Ad</span>
-        </Link>
+        </button>
       </div>
 
       {/* Main Grid: Left Sidebar Categories (15 items) & Right Ads List */}
@@ -193,7 +124,7 @@ function ClassifiedsContent() {
                 }`}
               >
                 <span>All Classified Categories</span>
-                <span className="text-[10px] opacity-75">{mockAds.length}</span>
+                <span className="text-[10px] opacity-75">{ads.length}</span>
               </button>
             </li>
 
@@ -242,16 +173,35 @@ function ClassifiedsContent() {
 
           {/* Ads Cards */}
           {filteredAds.length === 0 ? (
-            <div className="bg-white border border-[#CBD5E1] rounded-xl p-8 text-center text-[#64748B]">
-              <FaFolder className="text-[32px] text-gray-300 mx-auto mb-2" />
-              <p className="text-[14px] font-bold">No ads currently found in this category.</p>
-              <button
-                type="button"
-                onClick={() => setSelectedCategory("All")}
-                className="mt-3 text-[12px] font-black text-[#073F73] hover:underline"
-              >
-                Reset Filter to All
-              </button>
+            <div className="bg-white border border-[#CBD5E1] rounded-xl p-10 text-center text-[#64748B] space-y-3">
+              <FaFolder className="text-[36px] text-[#073F73]/30 mx-auto" />
+              <div>
+                <h4 className="text-base font-black text-[#073F73]">
+                  No Classified Ads in this Category Yet
+                </h4>
+                <p className="text-xs text-gray-500 mt-1 max-w-md mx-auto">
+                  Be the first verified vendor, contractor, architect, material supplier, or realtor to advertise in this vertical.
+                </p>
+              </div>
+              <div className="pt-2 flex items-center justify-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsPostModalOpen(true)}
+                  className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-4 py-2 rounded-md transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <FaPlusSquare />
+                  <span>Post Free Classified Ad</span>
+                </button>
+                {selectedCategory !== "All" && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory("All")}
+                    className="bg-gray-100 hover:bg-gray-200 text-[#073F73] text-xs font-bold px-3 py-2 rounded-md transition-colors cursor-pointer"
+                  >
+                    View All Categories
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -313,6 +263,14 @@ function ClassifiedsContent() {
           )}
         </div>
       </div>
+
+      {/* Post Classified Ad Modal */}
+      <PostAdModal
+        isOpen={isPostModalOpen}
+        onClose={() => setIsPostModalOpen(false)}
+        onAdCreated={handleAdCreated}
+        defaultCategoryId={selectedCategory === "All" ? "1" : selectedCategory}
+      />
     </div>
   );
 }

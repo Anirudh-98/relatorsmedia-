@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { RealtorsMediaIdCard } from "@/components/ui/RealtorsMediaIdCard";
 import { IdCardModal } from "@/components/ui/IdCardModal";
+import { MemberPropertiesList } from "@/components/dashboard/MemberPropertiesList";
 import { RealtorsMediaEmployee } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { loginMember } from "@/lib/firebase/auth";
@@ -22,11 +23,25 @@ import {
   FaLock,
   FaSpinner,
   FaEdit,
+  FaBuilding,
+  FaPlusCircle,
+  FaDirections,
 } from "react-icons/fa";
 
 export default function DashboardPage() {
   const { user, memberProfile, logout, loading, refreshProfile } = useAuth();
   const [isIdModalOpen, setIsIdModalOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<"idcard" | "properties">("idcard");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get("tab");
+      if (tabParam === "properties" || tabParam === "idcard") {
+        setActiveTab(tabParam);
+      }
+    }
+  }, []);
 
   // Login form state for unauthenticated visitors
   const [loginEmail, setLoginEmail] = useState("");
@@ -221,8 +236,16 @@ export default function DashboardPage() {
 
   return (
     <PortalLayout
-      title="MEMBER OFFICIAL ID CARD"
-      subtitle="Your verified real-time digital credential linked with the national Realtors Media database"
+      title={
+        activeTab === "idcard"
+          ? "MEMBER OFFICIAL ID CARD"
+          : "MY PROPERTY LISTINGS"
+      }
+      subtitle={
+        activeTab === "idcard"
+          ? "Your verified real-time digital credential linked with the national Realtors Media database"
+          : "Manage your assigned properties and verify Google Maps navigation links"
+      }
       badge={
         isProfileComplete
           ? `${resolvedTier.toUpperCase()} MEMBER`
@@ -244,178 +267,227 @@ export default function DashboardPage() {
       }
     >
       <div className="space-y-6">
-        {/* Real-time Database Registration Alert if ID Card is not in Firestore */}
-        {!isProfileComplete && (
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 p-5 rounded-[4px] shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="flex items-start gap-3.5">
-              <FaExclamationTriangle className="text-2xl text-amber-600 mt-0.5 shrink-0" />
-              <div>
-                <h3 className="text-base font-black text-amber-900">
-                  Official Green ID Card Not Stored in Database Yet
-                </h3>
-                <p className="text-xs text-amber-800 mt-1 max-w-2xl leading-relaxed">
-                  Logged in as <strong>{user.email}</strong>. Your account is authenticated, but your real name, photograph, and Green ID card record have not been stored in the database yet. Click below to enter your details, upload your real photograph, and save your verified card to Firestore.
-                </p>
-              </div>
-            </div>
+        {/* Navigation Tabs Bar */}
+        <div className="bg-white rounded-[6px] border border-[#C9D7E3] p-1.5 shadow-2xs flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               type="button"
-              onClick={() => setIsIdModalOpen(true)}
-              className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-4 py-2.5 rounded-[3px] transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center gap-1.5 shrink-0"
+              onClick={() => setActiveTab("idcard")}
+              className={`px-3.5 py-1.5 text-xs font-black uppercase rounded-[3px] transition-colors flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "idcard"
+                  ? "bg-[#073F73] text-white shadow-xs"
+                  : "bg-transparent text-gray-700 hover:bg-gray-100"
+              }`}
             >
-              <FaIdCard />
-              <span>Create & Save Green ID Card</span>
+              <FaIdCard className="text-xs" />
+              <span>Official ID Card</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab("properties")}
+              className={`px-3.5 py-1.5 text-xs font-black uppercase rounded-[3px] transition-colors flex items-center gap-1.5 cursor-pointer ${
+                activeTab === "properties"
+                  ? "bg-[#073F73] text-white shadow-xs"
+                  : "bg-transparent text-gray-700 hover:bg-gray-100"
+              }`}
+            >
+              <FaBuilding className="text-xs" />
+              <span>My Properties</span>
             </button>
           </div>
+
+          <div className="hidden sm:flex items-center gap-2 pr-2 text-[11px] font-bold text-gray-500">
+            <span>Signed in as: <strong className="text-[#073F73]">{user.email}</strong></span>
+          </div>
+        </div>
+
+        {/* ==================================================== */}
+        {/* TAB 1: MY PROPERTIES LIST */}
+        {/* ==================================================== */}
+        {activeTab === "properties" && (
+          <MemberPropertiesList />
         )}
 
-        {/* Official ID Card Showcase with Real-time Data */}
-        <div className="bg-white rounded-[4px] border border-[#C9D7E3] p-5 sm:p-6 shadow-xs">
-          {isProfileComplete ? (
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-              {/* Left Column: Official CR80 ID Card Preview (Green Tier) */}
-              <div className="md:col-span-5 flex flex-col items-center">
-                <RealtorsMediaIdCard
-                  employee={currentEmployee}
-                  theme={resolvedTier}
-                  width={300}
-                  className="shadow-xl rounded-[6px]"
-                />
-                <p className="text-[10.5px] text-gray-400 font-semibold mt-2.5 text-center">
-                  Live CR80 Digital & Physical Credential Match • {resolvedTier.toUpperCase()} TIER
-                </p>
-              </div>
-
-              {/* Right Column: Member Real-time Details */}
-              <div className="md:col-span-7 space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+        {/* ==================================================== */}
+        {/* TAB 3: OFFICIAL ID CARD */}
+        {/* ==================================================== */}
+        {activeTab === "idcard" && (
+          <div className="space-y-6">
+            {/* Real-time Database Registration Alert if ID Card is not in Firestore */}
+            {!isProfileComplete && (
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 p-5 rounded-[4px] shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <FaExclamationTriangle className="text-2xl text-amber-600 mt-0.5 shrink-0" />
                   <div>
-                    <span className="bg-[#E7F6EA] text-[#168A3A] text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                      ✓ Authenticated & Verified Member ({resolvedTier.toUpperCase()} TIER)
-                    </span>
-                    <h2 className="text-xl sm:text-2xl font-black text-[#073F73] mt-1">
-                      {currentEmployee.name}
-                    </h2>
-                    <p className="text-xs text-gray-500 font-semibold">
-                      {currentEmployee.designation} • {currentEmployee.department}
+                    <h3 className="text-base font-black text-amber-900">
+                      Official Green ID Card Not Stored in Database Yet
+                    </h3>
+                    <p className="text-xs text-amber-800 mt-1 max-w-2xl leading-relaxed">
+                      Logged in as <strong>{user.email}</strong>. Your account is authenticated, but your real name, photograph, and Green ID card record have not been stored in the database yet. Click below to enter your details, upload your real photograph, and save your verified card to Firestore.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsIdModalOpen(true)}
+                  className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-4 py-2.5 rounded-[3px] transition-colors whitespace-nowrap cursor-pointer shadow-sm flex items-center gap-1.5 shrink-0"
+                >
+                  <FaIdCard />
+                  <span>Create & Save Green ID Card</span>
+                </button>
+              </div>
+            )}
+
+            {/* Official ID Card Showcase with Real-time Data */}
+            <div className="bg-white rounded-[4px] border border-[#C9D7E3] p-5 sm:p-6 shadow-xs">
+              {isProfileComplete ? (
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
+                  {/* Left Column: Official CR80 ID Card Preview (Green Tier) */}
+                  <div className="md:col-span-5 flex flex-col items-center">
+                    <RealtorsMediaIdCard
+                      employee={currentEmployee}
+                      theme={resolvedTier}
+                      width={300}
+                      className="shadow-xl rounded-[6px]"
+                    />
+                    <p className="text-[10.5px] text-gray-400 font-semibold mt-2.5 text-center">
+                      Live CR80 Digital & Physical Credential Match • {resolvedTier.toUpperCase()} TIER
                     </p>
                   </div>
 
+                  {/* Right Column: Member Real-time Details */}
+                  <div className="md:col-span-7 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-gray-100 pb-3">
+                      <div>
+                        <span className="bg-[#E7F6EA] text-[#168A3A] text-[10px] font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                          ✓ Authenticated & Verified Member ({resolvedTier.toUpperCase()} TIER)
+                        </span>
+                        <h2 className="text-xl sm:text-2xl font-black text-[#073F73] mt-1">
+                          {currentEmployee.name}
+                        </h2>
+                        <p className="text-xs text-gray-500 font-semibold">
+                          {currentEmployee.designation} • {currentEmployee.department}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsIdModalOpen(true)}
+                        className="self-start sm:self-center bg-gray-100 hover:bg-gray-200 text-[#073F73] text-[11px] font-bold px-3 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <FaEdit className="text-[10px]" />
+                        <span>Edit ID Card</span>
+                      </button>
+                    </div>
+
+                    <div className="bg-[#F8FAFC] p-4 rounded-[4px] border border-[#CBD5E1] space-y-2 text-[12px]">
+                      <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                        <span className="text-gray-500">Employee / Member ID:</span>
+                        <strong className="text-[#073F73] font-bold">{currentEmployee.employeeId}</strong>
+                      </div>
+                      <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                        <span className="text-gray-500">Full Name:</span>
+                        <strong className="text-gray-800">{currentEmployee.name}</strong>
+                      </div>
+                      <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                        <span className="text-gray-500">Official Mobile:</span>
+                        <strong className="text-gray-800">{currentEmployee.phone || "Not Set"}</strong>
+                      </div>
+                      <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                        <span className="text-gray-500">Registered Email:</span>
+                        <strong className="text-gray-800">{currentEmployee.email}</strong>
+                      </div>
+                      <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                        <span className="text-gray-500">Operating Area:</span>
+                        <strong className="text-gray-800">{currentEmployee.location || "India"}</strong>
+                      </div>
+                      {currentEmployee.agencyName && (
+                        <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                          <span className="text-gray-500">Agency / Brokerage:</span>
+                          <strong className="text-gray-800">{currentEmployee.agencyName}</strong>
+                        </div>
+                      )}
+                      {currentEmployee.specialization && (
+                        <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                          <span className="text-gray-500">Specialization:</span>
+                          <strong className="text-gray-800">{currentEmployee.specialization}</strong>
+                        </div>
+                      )}
+                      {currentEmployee.licenseNumber && (
+                        <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                          <span className="text-gray-500">License / RERA:</span>
+                          <strong className="text-gray-800">{currentEmployee.licenseNumber}</strong>
+                        </div>
+                      )}
+                      {currentEmployee.issuedDate && (
+                        <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                          <span className="text-gray-500">Issuance Date:</span>
+                          <strong className="text-gray-800">{currentEmployee.issuedDate}</strong>
+                        </div>
+                      )}
+                      {currentEmployee.validTill && (
+                        <div className="flex justify-between py-0.5 border-b border-gray-200/60">
+                          <span className="text-gray-500">Valid Through:</span>
+                          <strong className="text-emerald-700">{currentEmployee.validTill}</strong>
+                        </div>
+                      )}
+                      <div className="flex justify-between py-0.5">
+                        <span className="text-gray-500">Public QR Verification:</span>
+                        <Link
+                          href={`/verify/${currentEmployee.employeeId}`}
+                          className="text-[#073F73] font-bold underline truncate max-w-[220px]"
+                        >
+                          {currentEmployee.verificationUrl}
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 pt-2">
+                      <Link
+                        href={`/verify/${currentEmployee.employeeId}`}
+                        className="bg-[#073F73] hover:bg-[#06345F] text-white text-xs font-bold px-4 py-2 rounded-[3px] transition-colors flex items-center gap-1.5 shadow-xs"
+                      >
+                        <FaEye />
+                        <span>Open Public Verification Page</span>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => setIsIdModalOpen(true)}
+                        className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-bold px-4 py-2 rounded-[3px] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        <FaDownload />
+                        <span>Download / Print Card</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-10 space-y-4 max-w-lg mx-auto">
+                  <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#168A3A] border border-emerald-200 flex items-center justify-center mx-auto text-2xl shadow-xs">
+                    <FaIdCard />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-[#073F73]">
+                      No Official ID Card in Database Yet
+                    </h3>
+                    <p className="text-xs text-gray-600 mt-1 leading-relaxed">
+                      Your account is logged in as <strong>{user.email}</strong>, but your ID card has not been registered in the database. Enter your name, mobile number, and upload your photo to store your verified Green ID card and activate QR scanning.
+                    </p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => setIsIdModalOpen(true)}
-                    className="self-start sm:self-center bg-gray-100 hover:bg-gray-200 text-[#073F73] text-[11px] font-bold px-3 py-1.5 rounded-[3px] border border-gray-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-6 py-3 rounded-[3px] transition-colors cursor-pointer shadow-md inline-flex items-center gap-2"
                   >
-                    <FaEdit className="text-[10px]" />
-                    <span>Edit ID Card</span>
+                    <FaIdCard />
+                    <span>Create & Register Green ID Card Now</span>
                   </button>
                 </div>
-
-                <div className="bg-[#F8FAFC] p-4 rounded-[4px] border border-[#CBD5E1] space-y-2 text-[12px]">
-                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                    <span className="text-gray-500">Employee / Member ID:</span>
-                    <strong className="text-[#073F73] font-bold">{currentEmployee.employeeId}</strong>
-                  </div>
-                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                    <span className="text-gray-500">Full Name:</span>
-                    <strong className="text-gray-800">{currentEmployee.name}</strong>
-                  </div>
-                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                    <span className="text-gray-500">Official Mobile:</span>
-                    <strong className="text-gray-800">{currentEmployee.phone || "Not Set"}</strong>
-                  </div>
-                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                    <span className="text-gray-500">Registered Email:</span>
-                    <strong className="text-gray-800">{currentEmployee.email}</strong>
-                  </div>
-                  <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                    <span className="text-gray-500">Operating Area:</span>
-                    <strong className="text-gray-800">{currentEmployee.location || "India"}</strong>
-                  </div>
-                  {currentEmployee.agencyName && (
-                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                      <span className="text-gray-500">Agency / Brokerage:</span>
-                      <strong className="text-gray-800">{currentEmployee.agencyName}</strong>
-                    </div>
-                  )}
-                  {currentEmployee.specialization && (
-                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                      <span className="text-gray-500">Specialization:</span>
-                      <strong className="text-gray-800">{currentEmployee.specialization}</strong>
-                    </div>
-                  )}
-                  {currentEmployee.licenseNumber && (
-                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                      <span className="text-gray-500">License / RERA:</span>
-                      <strong className="text-gray-800">{currentEmployee.licenseNumber}</strong>
-                    </div>
-                  )}
-                  {currentEmployee.issuedDate && (
-                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                      <span className="text-gray-500">Issuance Date:</span>
-                      <strong className="text-gray-800">{currentEmployee.issuedDate}</strong>
-                    </div>
-                  )}
-                  {currentEmployee.validTill && (
-                    <div className="flex justify-between py-0.5 border-b border-gray-200/60">
-                      <span className="text-gray-500">Valid Through:</span>
-                      <strong className="text-emerald-700">{currentEmployee.validTill}</strong>
-                    </div>
-                  )}
-                  <div className="flex justify-between py-0.5">
-                    <span className="text-gray-500">Public QR Verification:</span>
-                    <Link
-                      href={`/verify/${currentEmployee.employeeId}`}
-                      className="text-[#073F73] font-bold underline truncate max-w-[220px]"
-                    >
-                      {currentEmployee.verificationUrl}
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3 pt-2">
-                  <Link
-                    href={`/verify/${currentEmployee.employeeId}`}
-                    className="bg-[#073F73] hover:bg-[#06345F] text-white text-xs font-bold px-4 py-2 rounded-[3px] transition-colors flex items-center gap-1.5 shadow-xs"
-                  >
-                    <FaEye />
-                    <span>Open Public Verification Page</span>
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => setIsIdModalOpen(true)}
-                    className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-bold px-4 py-2 rounded-[3px] transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
-                  >
-                    <FaDownload />
-                    <span>Download / Print Card</span>
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
-          ) : (
-            <div className="text-center py-10 space-y-4 max-w-lg mx-auto">
-              <div className="w-16 h-16 rounded-full bg-emerald-50 text-[#168A3A] border border-emerald-200 flex items-center justify-center mx-auto text-2xl shadow-xs">
-                <FaIdCard />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-[#073F73]">
-                  No Official ID Card in Database Yet
-                </h3>
-                <p className="text-xs text-gray-600 mt-1 leading-relaxed">
-                  Your account is logged in as <strong>{user.email}</strong>, but your ID card has not been registered in the database. Enter your name, mobile number, and upload your photo to store your verified Green ID card and activate QR scanning.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsIdModalOpen(true)}
-                className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-6 py-3 rounded-[3px] transition-colors cursor-pointer shadow-md inline-flex items-center gap-2"
-              >
-                <FaIdCard />
-                <span>Create & Register Green ID Card Now</span>
-              </button>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       {/* ID Card Modal to enter details, upload photo and save to Firestore */}
