@@ -28,7 +28,7 @@ import { Firestore } from "firebase/firestore";
 import { FirebaseStorage } from "firebase/storage";
 import { useAuth } from "@/context/AuthContext";
 import { uploadPropertyImages, compressImage } from "@/lib/firebase/storage";
-import { createPropertyListing, PropertyListingData } from "@/lib/firebase/db";
+import { createPropertyListing, updatePropertyListing, IdCardRecordData, PropertyListingData } from "@/lib/firebase/db";
 import { submitPropertyCloudFunction } from "@/lib/firebase/functions";
 import { firstFormError, postPropertySchema } from "@/lib/validation/formSchemas";
 
@@ -38,6 +38,10 @@ interface PropertyUploadFormProps {
   customDb?: Firestore;
   customStorage?: FirebaseStorage;
   isAdminMode?: boolean;
+  /** Admin only: registered members a listing can be linked to (it then shows under their My Properties). */
+  linkableMembers?: IdCardRecordData[];
+  /** Admin only: an existing listing to edit; the form then saves changes instead of creating a listing. */
+  initialProperty?: PropertyListingData;
 }
 
 const COMMON_AMENITIES = [
@@ -73,14 +77,65 @@ const TOP_CITIES = [
   "Other",
 ];
 
+const NEGOTIABLE_SUFFIX = " (Negotiable)";
+
+/** Form values for a listing that is being edited. */
+function formFromProperty(p: PropertyListingData) {
+  const isNegotiable = p.price.endsWith(NEGOTIABLE_SUFFIX);
+  const isTopCity = TOP_CITIES.includes(p.city) && p.city !== "Other";
+  return {
+    title: p.title,
+    propertyType: p.propertyType,
+    listingType: p.listingType,
+    city: isTopCity ? p.city : "Other",
+    customCity: isTopCity ? "" : p.city,
+    locality: p.locality,
+    address: p.address || "",
+    price: isNegotiable ? p.price.slice(0, -NEGOTIABLE_SUFFIX.length) : p.price,
+    isPriceNegotiable: isNegotiable,
+    area: p.area,
+    bhk: p.bhk,
+    bathrooms: p.bathrooms || "2",
+    furnishing: p.furnishing || "Semi-Furnished",
+    facing: p.facing || "East",
+    reraNumber: p.reraNumber || "",
+    googleMapUrl: p.googleMapUrl || p.mapUrl || "",
+    name: p.name,
+    phone: p.phone,
+    email: p.email,
+    agencyName: p.agencyName || "",
+    description: p.description || "",
+  };
+}
+
 export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
   onSuccess,
   onCancel,
   customDb,
   customStorage,
   isAdminMode = false,
+  linkableMembers = [],
+  initialProperty,
 }) => {
+  const isEditMode = !!initialProperty?.id;
   const { user, memberProfile } = useAuth();
+
+  // Admin only: the registered member this listing belongs to (empty = official admin listing)
+  const [linkedMemberUid, setLinkedMemberUid] = useState(
+    () => linkableMembers.find((m) => m.uid === initialProperty?.authorUid)?.uid || ""
+  );
+  // When editing, the listing keeps its current owner unless the link field is changed
+  const [linkTouched, setLinkTouched] = useState(false);
+  const [editStatus, setEditStatus] = useState<PropertyListingData["status"]>(initialProperty?.status || "Active");
+  const [memberSearch, setMemberSearch] = useState("");
+  const linkedMember = linkableMembers.find((m) => m.uid === linkedMemberUid) || null;
+  const memberQuery = memberSearch.trim().toLowerCase();
+  const memberOptions = linkableMembers.filter(
+    (m) =>
+      m.uid === linkedMemberUid ||
+      !memberQuery ||
+      [m.fullName, m.name, m.employeeId, m.phone, m.email].some((v) => v?.toLowerCase().includes(memberQuery))
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form State
@@ -107,6 +162,7 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
     role: isAdminMode ? "Official Administrator" : "Verified Member Realtor",
     agencyName: memberProfile?.agencyName || (isAdminMode ? "Realtors Media Network" : ""),
     description: "",
+    ...(initialProperty ? formFromProperty(initialProperty) : {}),
   });
 
   // Keep contact details synced when user/profile or adminMode resolves
@@ -132,15 +188,33 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
     }
   }, [isAdminMode, user, memberProfile]);
 
-  const [selectedAmenities, setSelectedAmenities] = useState<string[]>([
-    "24/7 Security & CCTV",
-    "Car Parking",
-    "Gated Community",
-  ]);
+  // Linking fills the contact details from the member’s ID card; unlinking restores the admin defaults
+  const handleLinkMember = (uid: string) => {
+    setLinkedMemberUid(uid);
+    setLinkTouched(true);
+    const member = linkableMembers.find((m) => m.uid === uid);
+    setFormData((prev) => ({
+      ...prev,
+      name: member ? member.fullName || member.name || "" : "Admin Office",
+      phone: member ? member.phone || member.mobile || "" : "+91 98900 00000",
+      email: member ? member.email || "" : "admin@realtorsmedia.com",
+      agencyName: member ? member.agencyName || "" : "Realtors Media Network",
+    }));
+  };
+
+  const [selectedAmenities, setSelectedAmenities] = useState<string[]>(
+    initialProperty?.amenities || ["24/7 Security & CCTV", "Car Parking", "Gated Community"]
+  );
 
   // Image Upload State
-  const [selectedImageFiles, setSelectedImageFiles] = useState<File[]>([]);
-  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  // Photos already saved on a listing being edited are kept as their URLs; new ones are Files
+  const existingImages = initialProperty?.images?.length
+    ? initialProperty.images
+    : initialProperty?.imageUrl
+    ? [initialProperty.imageUrl]
+    : [];
+  const [selectedImageFiles, setSelectedImageFiles] = useState<(File | string)[]>(existingImages);
+  const [imagePreviews, setImagePreviews] = useState<string[]>(existingImages);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitStep, setSubmitStep] = useState<string>("");
   const [submitted, setSubmitted] = useState(false);
@@ -292,6 +366,7 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
       setSubmitStep("Saving verified property listing to database...");
       const primaryImageUrl = uploadedImageUrls[0] || "";
 
+      const keepOwner = !!initialProperty && !linkTouched;
       const listingData: PropertyListingData = {
         title: formData.title.trim(),
         propertyType: formData.propertyType,
@@ -311,18 +386,36 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
         name: formData.name.trim(),
         phone: formData.phone.trim(),
         email: formData.email.trim(),
-        role: isAdminMode ? "Authorized Administrator" : formData.role,
+        role: keepOwner
+          ? initialProperty.role
+          : linkedMember ? "Verified Member Realtor" : isAdminMode ? "Authorized Administrator" : formData.role,
         agencyName: formData.agencyName.trim(),
         description: formData.description.trim(),
         amenities: selectedAmenities,
         imageUrl: primaryImageUrl,
         images: uploadedImageUrls,
-        memberId: memberProfile?.employeeId || (isAdminMode ? "ADMIN" : ""),
-        authorUid: isAdminMode ? "admin@realtorsmedia.com" : (user?.uid || "guest"),
+        memberId: keepOwner
+          ? initialProperty.memberId || ""
+          : linkedMember?.employeeId || memberProfile?.employeeId || (isAdminMode ? "ADMIN" : ""),
+        // A linked listing is owned by that member, so it appears under their My Properties
+        authorUid: keepOwner
+          ? initialProperty.authorUid || "admin@realtorsmedia.com"
+          : linkedMember?.uid || (isAdminMode ? "admin@realtorsmedia.com" : (user?.uid || "guest")),
         status: "Active",
         views: 1,
         leads: 0,
       };
+
+      // Editing: save the changes on the existing listing (its view and lead counts are left alone)
+      if (initialProperty?.id) {
+        const changes: Partial<PropertyListingData> = { ...listingData, status: editStatus };
+        delete changes.views;
+        delete changes.leads;
+        await updatePropertyListing(initialProperty.id, changes, customDb);
+        setGeneratedRefId(initialProperty.id);
+        setSubmitted(true);
+        return;
+      }
 
       const firestoreDocId = await createPropertyListing(listingData, customDb);
 
@@ -376,6 +469,8 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
       agencyName: memberProfile?.agencyName || (isAdminMode ? "Realtors Media Network" : ""),
       description: "",
     });
+    setLinkedMemberUid("");
+    setMemberSearch("");
     setSelectedImageFiles([]);
     setImagePreviews([]);
     setSubmitted(false);
@@ -398,10 +493,12 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
             Live in Realtors Media Database
           </span>
           <h2 className="text-xl sm:text-2xl font-black text-[#073F73] mt-2">
-            Property Successfully Uploaded!
+            {isEditMode ? "Property Successfully Updated!" : "Property Successfully Uploaded!"}
           </h2>
           <p className="text-xs sm:text-sm text-gray-600 mt-1 max-w-md mx-auto">
-            Your property &ldquo;<strong>{formData.title}</strong>&rdquo; is now active in the verified marketplace and linked to your member profile.
+            Your property &ldquo;<strong>{formData.title}</strong>&rdquo; {isEditMode
+              ? "has been updated in the verified marketplace."
+              : "is now active in the verified marketplace and linked to your member profile."}
           </p>
         </div>
 
@@ -412,7 +509,7 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
           </div>
           <div className="flex justify-between border-b border-gray-200 pb-1">
             <span className="text-gray-500">Member ID / Author:</span>
-            <strong className="text-gray-800">{memberProfile?.employeeId || "Verified Member"}</strong>
+            <strong className="text-gray-800">{linkedMember?.employeeId || memberProfile?.employeeId || (isAdminMode ? "Admin Office" : "Verified Member")}</strong>
           </div>
           <div className="flex justify-between border-b border-gray-200 pb-1">
             <span className="text-gray-500">Location:</span>
@@ -444,7 +541,7 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
               className="bg-[#073F73] hover:bg-[#06345F] text-white text-xs font-black uppercase px-5 py-2.5 rounded-[3px] transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
             >
               <FaBuilding />
-              <span>Go to My Properties</span>
+              <span>{isAdminMode ? "Back to Properties" : "Go to My Properties"}</span>
             </button>
           )}
 
@@ -456,13 +553,15 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
             <span>View in Marketplace</span>
           </Link>
 
-          <button
-            type="button"
-            onClick={resetForm}
-            className="bg-white hover:bg-gray-100 text-gray-700 text-xs font-bold px-4 py-2 rounded-[3px] border border-gray-300 transition-colors cursor-pointer"
-          >
-            + Upload Another Property
-          </button>
+          {!isEditMode && (
+            <button
+              type="button"
+              onClick={resetForm}
+              className="bg-white hover:bg-gray-100 text-gray-700 text-xs font-bold px-4 py-2 rounded-[3px] border border-gray-300 transition-colors cursor-pointer"
+            >
+              + Upload Another Property
+            </button>
+          )}
         </div>
       </div>
     );
@@ -482,7 +581,7 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
             </span>
             <div>
               <h2 className="text-base sm:text-lg font-black text-[#073F73] uppercase tracking-tight">
-                Upload New Property Listing
+                {isEditMode ? "Edit Property Listing" : "Upload New Property Listing"}
               </h2>
               <p className="text-xs text-gray-500">
                 Post your verified plots, flats, villas, or commercial spaces with photos and Google Maps navigation
@@ -945,11 +1044,61 @@ export const PropertyUploadForm: React.FC<PropertyUploadFormProps> = ({
           <h3 className="text-xs font-black text-[#073F73] uppercase tracking-wider flex items-center justify-between">
             <span>6. Verified Realtor / Contact Details</span>
             <span className="text-[10px] text-[#168A3A] font-bold">
-              {isAdminMode
+              {linkedMember
+                ? `Linked to Member ID: ${linkedMember.employeeId}`
+                : isAdminMode
                 ? "Linked to: Official Admin Account"
                 : `Linked to Member ID: ${memberProfile?.employeeId || "Authenticated Member"}`}
             </span>
           </h3>
+
+          {isAdminMode && (
+            <div className="bg-white border border-[#CBD5E1] rounded p-3 space-y-2">
+              <label className="block text-[10.5px] font-bold text-gray-600 uppercase">
+                Link to Registered Member (optional)
+              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={memberSearch}
+                  onChange={(e) => setMemberSearch(e.target.value)}
+                  placeholder="Search by name, Member ID, phone or email"
+                  className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:border-[#073F73]"
+                />
+                <select
+                  value={linkedMemberUid}
+                  onChange={(e) => handleLinkMember(e.target.value)}
+                  className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:border-[#073F73]"
+                >
+                  <option value="">Not linked (official admin listing)</option>
+                  {memberOptions.map((m) => (
+                    <option key={m.employeeId} value={m.uid}>
+                      {m.fullName || m.name} ({m.employeeId})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {isEditMode && (
+                <div className="flex items-center gap-2">
+                  <label className="text-[10.5px] font-bold text-gray-600 uppercase">Listing Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as PropertyListingData["status"])}
+                    className="px-2.5 py-1.5 text-xs border border-gray-300 rounded bg-white focus:outline-none focus:border-[#073F73]"
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Under Offer">Under Offer</option>
+                    <option value="Sold">Sold</option>
+                  </select>
+                </div>
+              )}
+              <p className="text-[10.5px] text-gray-500">
+                {linkableMembers.length === 0
+                  ? "No registered members with an active ID card were found."
+                  : "A linked property appears in that member’s dashboard under My Properties, and the contact details below are filled from their ID card."}
+              </p>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div>

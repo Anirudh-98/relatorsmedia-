@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   FaBuilding,
   FaDirections,
+  FaEdit,
   FaExclamationTriangle,
   FaEye,
   FaIdCard,
@@ -24,6 +25,7 @@ import { PortalLayout } from "@/components/layout/PortalLayout";
 import { getAdminFirebase, signInAdmin, signOutAdmin } from "@/lib/firebase/isolated";
 import {
   createIssuerAccount,
+  ISSUER_PASSWORD_MIN_LENGTH,
   listAllIdCards,
   listIssuers,
   setIssuerActive,
@@ -42,7 +44,7 @@ import { PropertyUploadForm } from "@/components/dashboard/PropertyUploadForm";
 import { PropertyDetailsModal } from "@/components/properties/PropertyDetailsModal";
 import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
 import { firstFormError, issuerAccountSchema } from "@/lib/validation/formSchemas";
-import { PASSWORD_HINT, PASSWORD_MAX_LENGTH } from "@/lib/validation/idCardSchemas";
+import { PASSWORD_MAX_LENGTH } from "@/lib/validation/idCardSchemas";
 
 const inputClass =
   "w-full px-2.5 py-1.5 text-[12px] font-semibold border border-[#CBD5E1] rounded-md focus:outline-none focus:ring-2 focus:ring-[#0284C7] focus:border-transparent bg-[#FAFBFD]";
@@ -143,6 +145,7 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [issuers, setIssuers] = useState<StaffRecord[]>([]);
   const [properties, setProperties] = useState<PropertyListingData[]>([]);
   const [showPropertyUpload, setShowPropertyUpload] = useState(false);
+  const [editingProperty, setEditingProperty] = useState<PropertyListingData | null>(null);
   const [selectedPropertyModal, setSelectedPropertyModal] = useState<PropertyListingData | null>(null);
   const [deletingPropId, setDeletingPropId] = useState<string | null>(null);
   const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
@@ -471,25 +474,36 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
               </div>
               <button
                 type="button"
-                onClick={() => setShowPropertyUpload(!showPropertyUpload)}
+                onClick={() => {
+                  setShowPropertyUpload(editingProperty ? false : !showPropertyUpload);
+                  setEditingProperty(null);
+                }}
                 className="bg-[#168A3A] hover:bg-[#126f2f] text-white text-xs font-black uppercase px-4 py-2.5 rounded-md transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs whitespace-nowrap"
               >
                 <FaPlusCircle />
-                <span>{showPropertyUpload ? "Close Upload Form" : "+ Add New Property"}</span>
+                <span>{editingProperty ? "Close Edit Form" : showPropertyUpload ? "Close Upload Form" : "+ Add New Property"}</span>
               </button>
             </div>
 
-            {showPropertyUpload && (
+            {(showPropertyUpload || editingProperty) && (
               <div className="p-4 bg-gray-50 border-b border-[#CBD5E1]">
                 <PropertyUploadForm
+                  // Remount when switching between a new listing and the one being edited
+                  key={editingProperty?.id || "new"}
+                  initialProperty={editingProperty || undefined}
                   customDb={getAdminFirebase().db}
                   customStorage={getAdminFirebase().storage}
                   isAdminMode={true}
+                  linkableMembers={memberCards.filter((c) => c.uid && (!c.status || c.status === "ACTIVE"))}
                   onSuccess={() => {
                     setShowPropertyUpload(false);
+                    setEditingProperty(null);
                     load();
                   }}
-                  onCancel={() => setShowPropertyUpload(false)}
+                  onCancel={() => {
+                    setShowPropertyUpload(false);
+                    setEditingProperty(null);
+                  }}
                 />
               </div>
             )}
@@ -551,6 +565,18 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
                       title="View Details"
                     >
                       <FaEye className="text-xs" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingProperty(p);
+                        setShowPropertyUpload(false);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                      className="p-1.5 text-[#168A3A] hover:bg-green-50 rounded cursor-pointer"
+                      title="Edit Listing"
+                    >
+                      <FaEdit className="text-xs" />
                     </button>
                     <button
                       type="button"
@@ -727,7 +753,7 @@ function IssuerLoginPanel({
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder={PASSWORD_HINT}
+              placeholder={`${ISSUER_PASSWORD_MIN_LENGTH}-${PASSWORD_MAX_LENGTH} characters, incl. a special character`}
               className={inputClass}
             />
           </div>

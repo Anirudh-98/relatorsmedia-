@@ -14,14 +14,14 @@ service firebase.storage {
     // Raster images only: SVG can carry scripts
     function isImageUnder(maxBytes) {
       return request.resource.size < maxBytes
-        && request.resource.contentType.matches('image/.*')
-        && !request.resource.contentType.matches('image/svg.*');
+        && request.resource.contentType in ['image/jpeg', 'image/png', 'image/webp'];
     }
 
     // ID card photos: `members/{uid}/...` for members, `members/employee_{id}/...` for employee cards.
-    // Public read for ID cards and QR verification; files are never overwritten or deleted except by the admin
+    // Each photo is readable by its URL (ID cards and QR verification) but folders cannot be listed;
+    // files are never overwritten or deleted except by the admin
     match /members/{ownerId}/{allPaths=**} {
-      allow read: if true;
+      allow get: if true;
       allow create: if isImageUnder(10 * 1024 * 1024) && (
         (request.auth != null && request.auth.uid == ownerId)
         || (ownerId.matches('employee_.*') && (isAdmin() || isIssuer()))
@@ -29,11 +29,11 @@ service firebase.storage {
       allow update, delete: if isAdmin();
     }
 
-    // Property images: members & guests can upload property photos (Max 5MB per photo)
+    // Property images: uploaded by the admin with the listing (Max 5MB per photo)
     match /properties/{allPaths=**} {
-      allow read: if true;
-      allow create, update: if isImageUnder(5 * 1024 * 1024);
-      allow delete: if isAdmin() || request.auth != null;
+      allow get: if true;
+      allow create: if isAdmin() && isImageUnder(5 * 1024 * 1024);
+      allow update, delete: if isAdmin();
     }
 
     // Default deny for all other paths

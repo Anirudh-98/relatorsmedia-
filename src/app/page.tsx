@@ -7,6 +7,7 @@ import { LeftSidebar } from "@/components/LeftSidebar/LeftSidebar";
 import { MediaHero } from "@/components/CenterContent/MediaHero";
 import { LatestUpdates } from "@/components/CenterContent/LatestUpdates";
 import { PropertyCategories } from "@/components/CenterContent/PropertyCategories";
+import { LatestProperties } from "@/components/CenterContent/LatestProperties";
 import { ServicesSection } from "@/components/CenterContent/ServicesSection";
 import { AudienceCards } from "@/components/CenterContent/AudienceCards";
 import { RightSidebar } from "@/components/RightSidebar/RightSidebar";
@@ -53,6 +54,9 @@ export default function Home() {
 
             {/* Property & Project Categories (5x2 Grid) */}
             <PropertyCategories />
+
+            {/* Newest posted properties (hidden until a listing exists) */}
+            <LatestProperties />
 
             {/* Services & Opportunities */}
             <ServicesSection />

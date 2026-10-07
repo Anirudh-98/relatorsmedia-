@@ -14,6 +14,7 @@ import {
 } from "react-icons/fa";
 import { getProperties, PropertyListingData } from "@/lib/firebase/db";
 import { CategoryListingsView } from "@/components/properties/CategoryListingsView";
+import { matchesPropertyCategory } from "@/lib/utils/propertyCategory";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -32,17 +33,7 @@ export default async function CategoryDetailPage({ params }: PageProps) {
   };
 
   const allListings = await getProperties().catch(() => []);
-  const matchingListings = allListings.filter((p) => {
-    const pType = (p.propertyType || "").toLowerCase();
-    const cTitle = category.title.toLowerCase();
-    const cSlug = slug.toLowerCase();
-    return (
-      pType.includes(cTitle) ||
-      cTitle.includes(pType) ||
-      pType.replace(/[^a-z0-9]/g, "-") === cSlug ||
-      pType.replace(/[^a-z0-9]/g, "").includes(cSlug.replace(/[^a-z0-9]/g, ""))
-    );
-  });
+  const matchingListings = allListings.filter((p) => matchesPropertyCategory(p.propertyType, slug));
 
   // Firestore Timestamps are class instances and can't cross the Server -> Client boundary
   const toMillis = (value: unknown): number | null =>

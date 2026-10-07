@@ -207,37 +207,6 @@ export async function getMemberProfile(
   return null;
 }
 
-/** Registered member with this email (emails may have been saved with different letter case). */
-export async function getMemberByEmail(email: string): Promise<MemberProfileData | null> {
-  const clean = email.trim();
-  const variants = Array.from(new Set([clean, clean.toLowerCase()]));
-  const snap = await getDocs(query(collection(db, "members"), where("email", "in", variants), limit(1)));
-  return snap.empty ? null : (snap.docs[0].data() as MemberProfileData);
-}
-
-export async function getMemberByEmployeeId(employeeId: string): Promise<MemberProfileData | null> {
-  const cleanId = employeeId.trim();
-  const upperId = cleanId.toUpperCase();
-  try {
-    const q = query(
-      collection(db, "members"),
-      where("employeeId", "in", [cleanId, upperId, cleanId.toLowerCase()]),
-      limit(1)
-    );
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      return snap.docs[0].data() as MemberProfileData;
-    }
-  } catch {
-    const q = query(collection(db, "members"), where("employeeId", "==", cleanId), limit(1));
-    const snap = await getDocs(q);
-    if (!snap.empty) {
-      return snap.docs[0].data() as MemberProfileData;
-    }
-  }
-  return null;
-}
-
 // ----------------------------------------------------
 // ID Cards Registry (Firestore: `idCards/{employeeId}`)
 // ----------------------------------------------------
@@ -350,19 +319,6 @@ export async function getIdCardRecord(employeeId: string): Promise<IdCardRecordD
       return upperSnap.data() as IdCardRecordData;
     }
   }
-
-  // Also query where employeeId == cleanId or upperId or lowerId
-  try {
-    const q = query(
-      collection(db, "idCards"),
-      where("employeeId", "in", [cleanId, upperId, cleanId.toLowerCase()]),
-      limit(1)
-    );
-    const querySnap = await getDocs(q);
-    if (!querySnap.empty) {
-      return querySnap.docs[0].data() as IdCardRecordData;
-    }
-  } catch {}
 
   return null;
 }

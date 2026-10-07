@@ -6,7 +6,7 @@ import { useParams } from "next/navigation";
 import { PortalLayout } from "@/components/layout/PortalLayout";
 import { RealtorsMediaIdCard } from "@/components/ui/RealtorsMediaIdCard";
 import { RealtorsMediaEmployee } from "@/types";
-import { getIdCardRecord, getMemberByEmployeeId } from "@/lib/firebase/db";
+import { getIdCardRecord } from "@/lib/firebase/db";
 import {
   FaCheckCircle,
   FaTimesCircle,
@@ -70,32 +70,6 @@ export default function VerifyPage() {
             specialization: idCardDoc.specialization || "Residential Properties",
             experience: idCardDoc.experience || "",
             cardType: idCardDoc.cardType === "employee" ? "employee" : "member",
-          });
-          setIsVerified(true);
-          setIsLoading(false);
-          return;
-        }
-
-        // 2. Check Firestore `members` collection (Real-time live database)
-        const memberDoc = await getMemberByEmployeeId(decodedId);
-        if (memberDoc && (!memberDoc.status || memberDoc.status === "ACTIVE")) {
-          setEmployee({
-            name: memberDoc.fullName || memberDoc.name || "",
-            designation: memberDoc.designation || "VERIFIED REALTOR",
-            employeeId: memberDoc.employeeId,
-            department: memberDoc.department || "Property Sales & Channel",
-            location: memberDoc.location || (memberDoc.city ? `${memberDoc.city}, ${memberDoc.state || "India"}` : "India"),
-            issuedDate: memberDoc.issuedDate || "",
-            validTill: memberDoc.validTill || "",
-            photo: memberDoc.photoUrl || memberDoc.photo || "",
-            verificationUrl: memberDoc.verificationUrl || `https://www.realtorsmedia.world/verify/${memberDoc.employeeId}`,
-            theme: (((memberDoc.selectedTier as string) === "orange" || (memberDoc.selectedTier as string) === "red") ? "orange" : memberDoc.selectedTier === "green" ? "green" : "blue") as any,
-            phone: memberDoc.phone || memberDoc.mobile || "",
-            email: memberDoc.email || "",
-            agencyName: memberDoc.agencyName || memberDoc.companyName || "",
-            licenseNumber: memberDoc.licenseNumber || memberDoc.reraNo || "",
-            specialization: memberDoc.specialization || "Residential Properties",
-            experience: memberDoc.experience || memberDoc.experienceYears || "",
           });
           setIsVerified(true);
           setIsLoading(false);

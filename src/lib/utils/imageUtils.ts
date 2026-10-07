@@ -5,6 +5,33 @@
  */
 export const PLACEHOLDER_PHOTO = "/images/member_placeholder.svg";
 
+const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "realtorsmedia-cf89e";
+const STORAGE_BUCKETS = Array.from(
+  new Set([
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${FIREBASE_PROJECT_ID}.firebasestorage.app`,
+    `${FIREBASE_PROJECT_ID}.firebasestorage.app`,
+    `${FIREBASE_PROJECT_ID}.appspot.com`,
+  ])
+);
+
+/**
+ * True for download URLs of this project's Firebase Storage buckets: the only
+ * remote images the same-origin proxy (/api/proxy-image) will fetch.
+ */
+export function isProxiableImageUrl(url: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== "https:" || parsed.username || parsed.password || parsed.port) return false;
+  return (
+    parsed.hostname === "firebasestorage.googleapis.com" &&
+    STORAGE_BUCKETS.some((bucket) => parsed.pathname.startsWith(`/v0/b/${bucket}/o/`))
+  );
+}
+
 export function getSafePhotoUrl(url?: string | null, version?: string | null): string {
   if (!url) return PLACEHOLDER_PHOTO;
   if (
@@ -14,8 +41,8 @@ export function getSafePhotoUrl(url?: string | null, version?: string | null): s
   ) {
     return url;
   }
-  // Route any external HTTP/HTTPS images (e.g. Firebase Storage) through our same-origin proxy
-  if (url.startsWith("http://") || url.startsWith("https://")) {
+  // Route Firebase Storage images through our same-origin proxy
+  if (isProxiableImageUrl(url)) {
     const vParam = version ? `&v=${encodeURIComponent(version)}` : "";
     return `/api/proxy-image?url=${encodeURIComponent(url)}${vParam}`;
   }
@@ -31,10 +58,9 @@ export async function convertUrlToDataUrl(url: string): Promise<string> {
   if (!url) return "";
   if (url.startsWith("data:")) return url;
 
-  const targetUrl =
-    url.startsWith("http://") || url.startsWith("https://")
-      ? `/api/proxy-image?url=${encodeURIComponent(url)}&t=${Date.now()}`
-      : url;
+  const targetUrl = isProxiableImageUrl(url)
+    ? `/api/proxy-image?url=${encodeURIComponent(url)}&t=${Date.now()}`
+    : url;
 
   try {
     const res = await fetch(targetUrl, { cache: "no-store" });

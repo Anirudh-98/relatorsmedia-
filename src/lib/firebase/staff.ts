@@ -6,6 +6,7 @@ import { getPasswordError } from "../validation/idCardSchemas";
 
 // Issuer login IDs are mapped to Firebase Auth emails on this domain (never shown to users)
 const ISSUER_EMAIL_DOMAIN = "issuer.realtorsmedia.world";
+export const ISSUER_PASSWORD_MIN_LENGTH = 10;
 
 /** Someone allowed to generate ID cards: an issuer account, or the admin. */
 export interface CardIssuer {
@@ -109,6 +110,10 @@ export async function createIssuerAccount(
   }
   const passwordError = getPasswordError(params.password);
   if (passwordError) throw new Error(passwordError);
+  // Issuer logins can create official cards, so they need a longer password than members
+  if (params.password.length < ISSUER_PASSWORD_MIN_LENGTH) {
+    throw new Error(`Issuer password must be at least ${ISSUER_PASSWORD_MIN_LENGTH} characters.`);
+  }
 
   const email = loginIdToEmail(loginId);
   const { auth } = getIsolatedFirebase("issuer-provisioning");

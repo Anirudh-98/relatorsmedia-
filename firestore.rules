@@ -7,7 +7,7 @@ service cloud.firestore {
     //   admin  - admin@realtorsmedia.com (manages issuers, properties, sees every card)
     //   issuer - active `staff/{uid}` record created by the admin (employee cards)
     //   member - any signed-in user, limited to their own records
-    //   public - anyone: verification lookups and inquiry submissions only
+    //   public - anyone: single ID card verification and inquiry submissions only
     // ========================================================
     function isAuthenticated() {
       return request.auth != null;
@@ -29,50 +29,151 @@ service cloud.firestore {
       return isAdmin() || isIssuer();
     }
 
-    // Public single-record lookups (verification, login, password reset) are allowed;
-    // bulk listing of personal data is not
-    function isSingleLookup() {
-      return request.query.limit <= 1;
-    }
-
     function isShortString(value, max) {
       return value is string && value.size() <= max;
     }
 
+    // The signed-in user's own record, matched by uid or by their login email (older records)
+    function isOwnRecord() {
+      return isAuthenticated() && (
+        resource.data.get('uid', '') == request.auth.uid
+        || ('email' in request.auth.token && resource.data.get('email', '') == request.auth.token.email)
+      );
+    }
+
+    // A field the write leaves as it was (older records may hold values the checks below reject)
+    function isUnchanged(key) {
+      return resource != null && request.resource.data.get(key, null) == resource.data.get(key, null);
+    }
+
+    function isMemberTier(tier) {
+      return tier in ['green', 'blue', 'orange'];
+    }
+
+    // Member card IDs: RM-A (orange), RM-B (blue), RM-C (green). RM-E is reserved for employee cards
+    function isMemberCardIdForTier(id, tier) {
+      return id is string
+        && id.upper().matches('RM-[ABC]-[0-9]{4,8}')
+        && id.upper().matches((tier == 'orange' ? 'RM-A' : (tier == 'blue' ? 'RM-B' : 'RM-C')) + '-.*');
+    }
+
+    function isMemberDesignation(value) {
+      return value in [
+        'VERIFIED REALTOR', 'EXECUTIVE REALTOR', 'VIP ELITE REALTOR',
+        'BUILDER / DEVELOPER', 'INDUSTRY PROFESSIONAL'
+      ];
+    }
+
+    // Photos live in Firebase Storage; a small inline image or a bundled preset is also accepted
+    function isSafePhoto(value) {
+      return value is string
+        && value.size() <= 900000
+        && value.matches('(https://firebasestorage[.]googleapis[.]com/.*|data:image/(jpeg|png|webp);base64,.*|/[^/].*)?');
+    }
+
+    // Cards are valid for two years from issue (one extra year of slack for time zones)
+    function isSaneValidTill(value) {
+      return value is string
+        && value.size() <= 20
+        && value.matches('.*[0-9]{4}')
+        && int(value[value.size() - 4:value.size()]) <= request.time.year() + 3;
+    }
+
+    function isIssuedByShape(data) {
+      return !('issuedBy' in data)
+        || (data.issuedBy is map && data.issuedBy.keys().hasOnly(['uid', 'loginId', 'name']));
+    }
+
+    // Checks shared by a member's own `members` profile and `idCards` record
+    function hasValidMemberCardFields(data, tierKey, idValue) {
+      return (isUnchanged(tierKey) || isMemberTier(data.get(tierKey, '')))
+        && (isUnchanged('designation') || isMemberDesignation(data.get('designation', '')))
+        && (isUnchanged('validTill') || isSaneValidTill(data.get('validTill', '')))
+        && (isUnchanged('photoUrl') || isSafePhoto(data.get('photoUrl', '')))
+        && (isUnchanged('photo') || isSafePhoto(data.get('photo', '')))
+        && ((isUnchanged(tierKey) && isUnchanged('employeeId')) || isMemberCardIdForTier(idValue, data.get(tierKey, '')))
+        && isShortString(data.get('fullName', ''), 100)
+        && isShortString(data.get('name', ''), 100)
+        && isShortString(data.get('phone', ''), 30)
+        && isShortString(data.get('mobile', ''), 30)
+        && isShortString(data.get('email', ''), 200)
+        && isShortString(data.get('location', ''), 200)
+        && isShortString(data.get('agencyName', ''), 200)
+        && isShortString(data.get('licenseNumber', ''), 100)
+        && isShortString(data.get('experience', ''), 100)
+        && isShortString(data.get('specialization', ''), 200)
+        && isShortString(data.get('department', ''), 100)
+        && isShortString(data.get('issuedDate', ''), 20)
+        && isShortString(data.get('verificationUrl', ''), 300)
+        && isIssuedByShape(data);
+    }
+
     // ========================================================
     // 1. MEMBERS (`members/{uid}`)
+    // Private: only the member and the admin can read a profile
     // ========================================================
     match /members/{memberId} {
-      allow get: if true;
-      allow list: if isSingleLookup() || isAdmin();
+      allow get: if isAdmin() || (isAuthenticated() && request.auth.uid == memberId) || isOwnRecord();
+      allow list: if isAdmin() || isOwnRecord();
 
-      // A member creates only their own profile (document id == their uid)
-      allow create: if isAuthenticated()
-        && request.auth.uid == memberId
-        && request.resource.data.uid == request.auth.uid;
+      function memberKeys() {
+        return [
+          'uid', 'fullName', 'name', 'phone', 'mobile', 'email', 'city', 'state', 'location',
+          'agencyName', 'companyName', 'licenseNumber', 'reraNo', 'experience', 'experienceYears',
+          'specialization', 'photoUrl', 'photo', 'memberType', 'selectedTier', 'tier', 'cardTier', 'cardType',
+          'employeeId', 'department', 'designation', 'verificationUrl', 'status', 'issuedDate',
+          'validTill', 'issuedBy', 'replacedBy', 'createdAt', 'updatedAt'
+        ];
+      }
 
-      // A member updates only their own profile; ownership cannot be reassigned
+      // A member writes only their own profile, and can only ever set it ACTIVE
+      function isOwnValidProfile() {
+        let d = request.resource.data;
+        return isAuthenticated()
+          && request.auth.uid == memberId
+          && d.uid == request.auth.uid
+          && d.get('status', 'ACTIVE') == 'ACTIVE'
+          && hasValidMemberCardFields(d, 'selectedTier', d.get('employeeId', ''))
+          && isShortString(d.get('city', ''), 100)
+          && isShortString(d.get('state', ''), 100)
+          && isShortString(d.get('companyName', ''), 200)
+          && isShortString(d.get('reraNo', ''), 100)
+          && isShortString(d.get('experienceYears', ''), 100);
+      }
+
+      allow create: if isAdmin()
+        || (isOwnValidProfile() && request.resource.data.keys().hasOnly(memberKeys()));
+
+      // A profile suspended by the admin cannot be changed (or re-activated) by its owner
       allow update: if isAdmin() || (
-        isAuthenticated()
-        && (request.auth.uid == memberId || request.auth.uid == resource.data.uid)
-        && request.resource.data.uid == request.auth.uid
-        && !(resource.data.get('status', '') == 'SUSPENDED' && request.resource.data.get('status', '') != 'SUSPENDED')
+        isOwnValidProfile()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(memberKeys())
+        && resource.data.get('status', '') != 'SUSPENDED'
       );
 
-      allow delete: if isAdmin() || (
-        isAuthenticated() && (request.auth.uid == memberId || request.auth.uid == resource.data.uid)
-      );
+      // Deleting and re-creating a profile would undo a suspension
+      allow delete: if isAdmin();
     }
 
     // ========================================================
     // 2. ID CARDS REGISTRY (`idCards/{cardId}`)
     // ========================================================
     match /idCards/{cardId} {
-      // Public QR verification (/verify/[id]) reads one card at a time
+      // Public QR verification (/verify/[id]) reads one card by its ID.
+      // Listing is limited to staff and to a member's own cards
       allow get: if true;
-      allow list: if isSingleLookup()
-        || isAdmin()
-        || (isIssuer() && resource.data.cardType == 'employee');
+      allow list: if isAdmin()
+        || (isIssuer() && resource.data.cardType == 'employee')
+        || isOwnRecord();
+
+      function memberCardKeys() {
+        return [
+          'employeeId', 'fullName', 'name', 'phone', 'mobile', 'email', 'location', 'agencyName',
+          'licenseNumber', 'experience', 'specialization', 'photoUrl', 'photo', 'cardTier',
+          'department', 'designation', 'issuedDate', 'validTill', 'status', 'verificationUrl',
+          'uid', 'cardType', 'issuedBy', 'replacedBy', 'createdAt', 'updatedAt'
+        ];
+      }
 
       // A member's own card: never an employee card, never an RM-E-* ID,
       // and the document id must match the card's employeeId
@@ -82,12 +183,40 @@ service cloud.firestore {
           && d.uid == request.auth.uid
           && d.get('cardType', 'member') == 'member'
           && d.get('employeeId', cardId) == cardId
-          && !cardId.upper().matches('^RM-E-.*');
+          && !cardId.upper().matches('RM-E-.*')
+          && hasValidMemberCardFields(d, 'cardTier', cardId);
+      }
+
+      // New member IDs must come from the tier's sequence: at most a few numbers past its counter
+      function isWithinIssuedSequence() {
+        let id = cardId.upper();
+        let counterId = id.matches('RM-A-.*')
+          ? 'memberSequence_orange'
+          : (id.matches('RM-B-.*') ? 'memberSequence_blue' : 'memberSequence_green');
+        let counterPath = /databases/$(database)/documents/counters/$(counterId);
+        let legacyPath = /databases/$(database)/documents/counters/memberSequence;
+        let base = exists(counterPath)
+          ? get(counterPath).data.currentSequence
+          : (exists(legacyPath) ? get(legacyPath).data.currentSequence : 1110);
+        let number = int(id.split('-')[2]);
+        return number >= 1111 && number <= base + 50;
+      }
+
+      // A member whose profile was suspended by the admin cannot issue themselves a new card
+      function isNotSuspendedMember() {
+        let memberPath = /databases/$(database)/documents/members/$(request.auth.uid);
+        return !exists(memberPath) || get(memberPath).data.get('status', '') != 'SUSPENDED';
       }
 
       allow create: if isAdmin()
         || (isIssuer() && request.resource.data.cardType == 'employee')
-        || isOwnMemberCard();
+        || (
+          isOwnMemberCard()
+          && request.resource.data.keys().hasOnly(memberCardKeys())
+          && request.resource.data.status == 'ACTIVE'
+          && isWithinIssuedSequence()
+          && isNotSuspendedMember()
+        );
 
       allow update: if isAdmin()
         || (isIssuer() && resource.data.cardType == 'employee' && request.resource.data.cardType == 'employee')
@@ -95,8 +224,10 @@ service cloud.firestore {
           isOwnMemberCard()
           && resource.data.uid == request.auth.uid
           && resource.data.get('cardType', 'member') == 'member'
-          // A card suspended by the admin cannot be re-activated by its owner
-          && !(resource.data.get('status', '') == 'SUSPENDED' && request.resource.data.get('status', '') != 'SUSPENDED')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(memberCardKeys())
+          // The owner can keep a card active or retire it; a suspended or retired card stays that way
+          && request.resource.data.get('status', '') in ['ACTIVE', 'SUPERSEDED']
+          && !(resource.data.get('status', '') in ['SUSPENDED', 'SUPERSEDED'])
         );
 
       allow delete: if isAdmin();
@@ -131,20 +262,14 @@ service cloud.firestore {
         && (!('amenities' in request.resource.data) || (request.resource.data.amenities is list && request.resource.data.amenities.size() <= 30))
         && request.resource.data.status in ['Active', 'Under Offer', 'Sold'];
 
-      // Anyone may bump the view / lead counters by one;
-      // Admin or author member can update/delete
-      function isCounterBump() {
-        let changed = request.resource.data.diff(resource.data).affectedKeys();
-        return changed.hasOnly(['views', 'leads'])
-          && request.resource.data.get('views', 0) - resource.data.get('views', 0) <= 1
-          && request.resource.data.get('views', 0) >= resource.data.get('views', 0)
-          && request.resource.data.get('leads', 0) - resource.data.get('leads', 0) <= 1
-          && request.resource.data.get('leads', 0) >= resource.data.get('leads', 0);
-      }
-
-      allow update: if isAdmin()
-        || isCounterBump()
-        || (isAuthenticated() && resource.data.get('authorUid', '') == request.auth.uid);
+      // The admin can change anything. The member a listing is linked to (authorUid)
+      // can only change its status, and can remove it
+      allow update: if isAdmin() || (
+        isAuthenticated()
+        && resource.data.get('authorUid', '') == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.status in ['Active', 'Under Offer', 'Sold']
+      );
 
       allow delete: if isAdmin()
         || (isAuthenticated() && resource.data.get('authorUid', '') == request.auth.uid);
@@ -161,7 +286,12 @@ service cloud.firestore {
         ])
         && isShortString(request.resource.data.name, 100)
         && isShortString(request.resource.data.phone, 30)
+        && isShortString(request.resource.data.get('email', ''), 200)
+        && isShortString(request.resource.data.get('propertyId', ''), 100)
+        && isShortString(request.resource.data.get('propertyName', ''), 200)
+        && isShortString(request.resource.data.get('budget', ''), 100)
         && isShortString(request.resource.data.get('message', ''), 2000)
+        && isShortString(request.resource.data.get('memberUid', ''), 128)
         && request.resource.data.status == 'New';
 
       allow get, list: if isAdmin()
@@ -179,46 +309,57 @@ service cloud.firestore {
 
     // ========================================================
     // 5. CLASSIFIEDS (`classifieds/{adId}`)
-    // Public directory; anyone or members can submit free ads
+    // Public directory; ads are published by the admin
     // ========================================================
     match /classifieds/{adId} {
       allow get, list: if true;
-      allow create: if isShortString(request.resource.data.get('title', ''), 200)
-        && isShortString(request.resource.data.get('phone', ''), 30);
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     // ========================================================
     // 6. SEQUENTIAL ID COUNTERS (`counters/{counterId}`)
-    // Written while a card is issued; can only move forward
+    // Written while a card is issued; can only move forward, a few numbers at a time
     // ========================================================
     match /counters/{counterId} {
       // Public to preview the next ID on the register page
       allow get: if true;
       allow list: if isAdmin();
 
-      function isValidCounterWrite() {
+      function isMemberCounter() {
+        return counterId in ['memberSequence_green', 'memberSequence_blue', 'memberSequence_orange'];
+      }
+
+      function isEmployeeCounter() {
+        return counterId == 'employeeSequence' && isStaff();
+      }
+
+      function hasValidSequence() {
         let d = request.resource.data;
         return isAuthenticated()
-          && (
-            counterId == 'memberSequence'
-            || counterId == 'memberSequence_green'
-            || counterId == 'memberSequence_blue'
-            || counterId == 'memberSequence_orange'
-            || counterId.matches('^memberSequence_.*')
-            || (counterId == 'employeeSequence' && isStaff())
-          )
+          && (isMemberCounter() || isEmployeeCounter())
           && d.currentSequence is int
           && d.currentSequence > 1110
           && d.currentSequence < 100000000;
       }
 
-      allow create: if isValidCounterWrite()
-        && request.resource.data.keys().hasOnly(['currentSequence', 'lastEmployeeId', 'lastPrefix', 'updatedAt']);
+      // Where a tier's numbering starts: 1111, or after the older shared `memberSequence` counter
+      function startingSequence() {
+        let legacyPath = /databases/$(database)/documents/counters/memberSequence;
+        return exists(legacyPath) ? get(legacyPath).data.currentSequence : 1110;
+      }
 
-      allow update: if isValidCounterWrite()
+      allow create: if isAdmin() || (
+        hasValidSequence()
+        && request.resource.data.keys().hasOnly(['currentSequence', 'lastEmployeeId', 'lastPrefix', 'updatedAt'])
+        && (isEmployeeCounter() || request.resource.data.currentSequence <= startingSequence() + 50)
+      );
+
+      allow update: if isAdmin() || (
+        hasValidSequence()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['currentSequence', 'lastEmployeeId', 'lastPrefix', 'updatedAt'])
-        && request.resource.data.currentSequence >= resource.data.get('currentSequence', 0);
+        && request.resource.data.currentSequence >= resource.data.get('currentSequence', 0)
+        && (isEmployeeCounter() || request.resource.data.currentSequence <= resource.data.get('currentSequence', 0) + 50)
+      );
 
       allow delete: if isAdmin();
     }

@@ -477,6 +477,12 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
       return;
     }
 
+    // The Green card is free: save it straight away, with no payment QR
+    if (selectedTier === "green") {
+      await saveCard();
+      return;
+    }
+
     // Payment comes first: the details are saved only after "Done" on the payment QR
     setShowPaymentQr(true);
   };

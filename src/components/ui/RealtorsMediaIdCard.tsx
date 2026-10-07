@@ -209,12 +209,6 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
       .replace("https://realtorsmedia.world", "https://www.realtorsmedia.world");
 
   const isEmployeeCard = employee?.cardType === "employee";
-  const isGreenCard =
-    activeThemeKey === "green" ||
-    (employee as any)?.cardTier === "green" ||
-    (employee as any)?.theme === "green" ||
-    (typeof employee?.employeeId === "string" && employee.employeeId.startsWith("RM-C"));
-
   const badgeText = isEmployeeCard
     ? "EMPLOYEE"
     : employee?.designation &&
@@ -425,19 +419,17 @@ export const RealtorsMediaIdCard: React.FC<RealtorsMediaIdCardProps> = ({
         </div>
 
         {/* ══════════════════════════════════════════════════════════
-            11. QR CODE — right side below slogan (Omitted for free Green card)
+            11. QR CODE — right side below slogan
            ══════════════════════════════════════════════════════════ */}
-        {!isGreenCard && (
-          <div className="absolute right-[27px] top-[487px] z-10">
-            <QRCodeSVG
-              value={qrValue}
-              size={99}
-              level="M"
-              bgColor="transparent"
-              fgColor="#000000"
-            />
-          </div>
-        )}
+        <div className="absolute right-[27px] top-[487px] z-10">
+          <QRCodeSVG
+            value={qrValue}
+            size={99}
+            level="M"
+            bgColor="transparent"
+            fgColor="#000000"
+          />
+        </div>
 
         {/* ══════════════════════════════════════════════════════════
             12. BUILDING — glass towers bleeding off the right edge

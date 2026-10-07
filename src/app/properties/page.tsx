@@ -23,6 +23,7 @@ import {
 } from "react-icons/fa";
 import { getProperties, PropertyListingData } from "@/lib/firebase/db";
 import { PropertyDetailsModal } from "@/components/properties/PropertyDetailsModal";
+import { matchesPropertyCategory } from "@/lib/utils/propertyCategory";
 
 interface PropertyListing {
   id: string;
@@ -115,7 +116,7 @@ function PropertiesContent() {
     const matchesCategory =
       categoryParam === "All" ||
       p.category === categoryParam ||
-      p.type.toLowerCase().includes(categoryParam.toLowerCase().replace(/-/g, " "));
+      matchesPropertyCategory(p.type, categoryParam);
 
     return matchesQuery && matchesCity && matchesType && matchesCategory;
   });

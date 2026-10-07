@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FaUser, FaLock, FaEye, FaEyeSlash, FaSpinner, FaCheckCircle, FaExclamationCircle } from "react-icons/fa";
 import { loginMember } from "@/lib/firebase/auth";
-import { getMemberByEmployeeId } from "@/lib/firebase/db";
+import { getIdCardRecord } from "@/lib/firebase/db";
 import { firstFormError, memberLoginSchema } from "@/lib/validation/formSchemas";
 import { useAuth } from "@/context/AuthContext";
 import { getSafePhotoUrl } from "@/lib/utils/imageUtils";
@@ -41,12 +41,12 @@ export const MemberLogin: React.FC = () => {
       let emailToLogin = userId.trim();
       if (/^RM-[A-Z]-\d{3,}$/i.test(emailToLogin)) {
         // Member ID: sign in with the email registered for that card
-        const member = await getMemberByEmployeeId(emailToLogin).catch(() => null);
-        if (!member?.email) {
-          setErrorMessage("No registered member was found with this Member ID.");
+        const card = await getIdCardRecord(emailToLogin).catch(() => null);
+        if (!card?.email) {
+          setErrorMessage("Account not found or password incorrect.");
           return;
         }
-        emailToLogin = member.email;
+        emailToLogin = card.email;
       } else if (!emailToLogin.includes("@")) {
         // e.g. "rohan" or "RM-B-2026"
         emailToLogin = `${emailToLogin.toLowerCase().replace(/[^a-z0-9]/g, "")}@realtorsmedia.com`;

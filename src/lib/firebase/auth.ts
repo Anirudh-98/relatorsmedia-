@@ -14,8 +14,6 @@ import type { IssuedBy } from "./staff";
 import {
   saveMemberProfile,
   getMemberProfile,
-  getMemberByEmail,
-  getMemberByEmployeeId,
   MemberProfileData,
   getNextEmployeeId,
   getPrefixForTier,
@@ -262,22 +260,24 @@ export async function logoutMember(): Promise<void> {
 }
 
 /**
- * Sends a password reset link to a registered member's email.
- * `identifier` is the member's registered email or Member ID; it is looked up in the database
- * first, and the link always goes to the email on record. Returns that email.
- * Throws with code "app/member-not-found" if no registered member matches.
+ * Sends a password reset link for a registered member.
+ * `identifier` is the member's registered email or Member ID; for a Member ID the link goes to
+ * the email on that card. Resolves the same way whether or not an account matches, so the form
+ * cannot be used to find out which emails or Member IDs are registered.
  */
-export async function resetMemberPassword(identifier: string): Promise<string> {
+export async function resetMemberPassword(identifier: string): Promise<void> {
   const value = identifier.trim();
-  const member = value.includes("@") ? await getMemberByEmail(value) : await getMemberByEmployeeId(value);
-  const email = member?.email?.trim();
-  if (!email) {
-    throw Object.assign(new Error("No registered member was found with this email or Member ID."), {
-      code: "app/member-not-found",
-    });
+  let email = value;
+  if (!value.includes("@")) {
+    const card = await getIdCardRecord(value).catch(() => null);
+    email = card?.email?.trim() || "";
+    if (!email) return;
   }
-  await sendPasswordResetEmail(auth, email);
-  return email;
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (err) {
+    if ((err as { code?: string })?.code !== "auth/user-not-found") throw err;
+  }
 }
 
 /**

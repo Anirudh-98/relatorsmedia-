@@ -48,4 +48,6 @@ CLAUDE.local.md
 AGENTS.md
 .claude/
 .firebase/
+.agents/
+skills-lock.json
 

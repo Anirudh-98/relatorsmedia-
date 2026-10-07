@@ -7,19 +7,11 @@ import { FaLock, FaCheckCircle, FaArrowLeft, FaPhoneAlt, FaExclamationTriangle, 
 import { resetMemberPassword } from "@/lib/firebase/auth";
 import { firstFormError, forgotPasswordSchema } from "@/lib/validation/formSchemas";
 
-// "rohan.d@gmail.com" -> "ro*****@gmail.com"
-const maskEmail = (email: string) => {
-  const [local, domain] = email.split("@");
-  return `${local.slice(0, 2)}${"*".repeat(Math.max(local.length - 2, 3))}@${domain}`;
-};
-
 export default function ForgotPasswordPage() {
   const [identifier, setIdentifier] = useState("");
   const [step, setStep] = useState<"request" | "success">("request");
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  // Where the link was sent; masked when the member searched by Member ID
-  const [sentTo, setSentTo] = useState("");
 
   const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,18 +26,14 @@ export default function ForgotPasswordPage() {
     setLoading(true);
 
     try {
-      const value = identifier.trim();
-      // The link goes to the email registered in the database, never to what was typed
-      const registeredEmail = await resetMemberPassword(value);
-      setSentTo(value.includes("@") ? registeredEmail : maskEmail(registeredEmail));
+      // The same confirmation is shown whether or not the account exists
+      await resetMemberPassword(identifier.trim());
       setStep("success");
     } catch (caught) {
       const err = caught as { code?: string; message?: string };
       console.error("Password reset error:", err);
       let msg = "Could not send the password reset link. Please try again.";
-      if (err.code === "app/member-not-found" || err.code === "auth/user-not-found") {
-        msg = "This email or Member ID is not registered with Realtors Media. Please check and try again.";
-      } else if (err.code === "auth/invalid-email") {
+      if (err.code === "auth/invalid-email") {
         msg = "Please enter a valid email address.";
       } else if (err.code === "auth/too-many-requests") {
         msg = "Too many reset requests. Please wait a few minutes and try again.";
@@ -142,10 +130,10 @@ export default function ForgotPasswordPage() {
                   <FaCheckCircle />
                 </div>
                 <h3 className="text-[16px] font-black text-[#073F73]">
-                  Password Reset Email Sent!
+                  Check Your Email
                 </h3>
                 <p className="text-[12px] text-gray-600 leading-relaxed">
-                  We have sent a password reset link to your registered email <strong>{sentTo}</strong>. Please check your inbox and spam folder, then click the link to choose your new password.
+                  If this email or Member ID is registered with Realtors Media, a password reset link has been sent to the email on record. Please check your inbox and spam folder, then click the link to choose your new password.
                 </p>
                 <div className="pt-2 flex flex-col gap-2">
                   <Link
@@ -159,7 +147,6 @@ export default function ForgotPasswordPage() {
                     onClick={() => {
                       setStep("request");
                       setIdentifier("");
-                      setSentTo("");
                     }}
                     className="text-[11px] text-gray-500 hover:text-gray-800 font-semibold"
                   >
