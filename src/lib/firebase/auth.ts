@@ -21,6 +21,7 @@ import {
   getPrefixForTier,
   saveIdCardRecord,
   retireIdCardRecord,
+  getIdCardRecord,
 } from "./db";
 import { uploadMemberPhoto, toFirestoreSafePhoto } from "./storage";
 
@@ -91,11 +92,20 @@ export async function registerMember(params: RegisterMemberParams): Promise<{ us
   const existingEmpId = existingProfile?.employeeId || "";
   const reuseExistingId =
     !params.employeeId && !!existingEmpId && existingEmpId.startsWith(`${getPrefixForTier(params.selectedTier)}-`);
-  const generatedEmpId = params.employeeId
-    ? params.employeeId.trim()
-    : reuseExistingId
-    ? existingEmpId
-    : await getNextEmployeeId(params.selectedTier, targetDb);
+  let generatedEmpId = params.employeeId ? params.employeeId.trim() : "";
+
+  if (generatedEmpId) {
+    // If a candidate ID was passed in, verify it does not collide with an existing member
+    const existingCard = await getIdCardRecord(generatedEmpId);
+    if (existingCard && existingCard.uid && existingCard.uid !== user.uid) {
+      // It was claimed by someone else; generate the true next sequential ID atomically
+      generatedEmpId = await getNextEmployeeId(params.selectedTier, targetDb);
+    }
+  } else if (reuseExistingId) {
+    generatedEmpId = existingEmpId;
+  } else {
+    generatedEmpId = await getNextEmployeeId(params.selectedTier, targetDb);
+  }
 
   // 3. Upload photo to Firebase Storage if provided
   let photoUrl = "";

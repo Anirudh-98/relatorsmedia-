@@ -255,6 +255,48 @@ export async function saveIdCardRecord(cardData: IdCardRecordData, firestore: Fi
     },
     { merge: true }
   );
+
+  // Sync the tier's counter forward so the counter document reflects this issued ID
+  await syncCounterForId(cleanId, firestore).catch((err) => {
+    console.warn("Could not sync counter for saved ID card:", err);
+  });
+}
+
+/**
+ * Ensures the tier's counter in Firestore `counters` collection is at least
+ * equal to the numeric sequence in the issued card ID.
+ */
+export async function syncCounterForId(cleanId: string, firestore: Firestore = db): Promise<void> {
+  try {
+    const match = cleanId.match(/^(RM-[A-E])-(\d+)$/i);
+    if (!match) return;
+    const prefix = match[1].toUpperCase();
+    const num = parseInt(match[2], 10);
+    if (isNaN(num) || num <= 1110) return;
+
+    const counterDocId = getCounterDocIdForPrefix(prefix);
+    const counterRef = doc(firestore, "counters", counterDocId);
+    const counterSnap = await getDoc(counterRef);
+    const stored =
+      counterSnap.exists() && typeof counterSnap.data().currentSequence === "number"
+        ? counterSnap.data().currentSequence
+        : 0;
+
+    if (num > stored) {
+      await setDoc(
+        counterRef,
+        {
+          currentSequence: num,
+          lastEmployeeId: cleanId,
+          lastPrefix: prefix,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+  } catch (err) {
+    console.warn("syncCounterForId error:", err);
+  }
 }
 
 /**
@@ -276,6 +318,19 @@ export async function retireIdCardRecord(
     replacedBy,
     updatedAt: serverTimestamp(),
   });
+}
+
+/**
+ * Permanently deletes an ID card record from Firestore idCards collection.
+ */
+export async function deleteIdCardRecord(
+  employeeId: string,
+  firestore: Firestore = db
+): Promise<void> {
+  const cleanId = employeeId.trim();
+  if (!cleanId) return;
+  const cardRef = doc(firestore, "idCards", cleanId);
+  await deleteDoc(cardRef);
 }
 
 export async function getIdCardRecord(employeeId: string): Promise<IdCardRecordData | null> {
@@ -468,75 +523,53 @@ export function getPrefixForTier(tier: "green" | "blue" | "orange" | "red" | str
   const t = (tier || "").toLowerCase();
   if (t === "orange" || t === "red" || t === "rm-a") return "RM-A";
   if (t === "blue" || t === "rm-b") return "RM-B";
+  if (t === "employee" || t === "rm-e") return "RM-E";
   return "RM-C"; // Default Green Tier
 }
 
 /**
- * Queries Firestore to inspect the last generated ID card in the database
- * and finds the highest sequence number currently registered.
+ * Returns the distinct Firestore counter document ID for each ID card tier.
+ * Each tier (Green, Blue, Orange, Employee) tracks its own independent counter.
+ */
+export function getCounterDocIdForTier(tier: "green" | "blue" | "orange" | "red" | string): string {
+  const t = (tier || "").toLowerCase();
+  if (t === "orange" || t === "red" || t === "rm-a") return "memberSequence_orange";
+  if (t === "blue" || t === "rm-b") return "memberSequence_blue";
+  if (t === "employee" || t === "rm-e") return "employeeSequence";
+  return "memberSequence_green"; // Default Green Tier
+}
+
+/**
+ * Returns the distinct Firestore counter document ID given an ID prefix (e.g. RM-A, RM-B, RM-C).
+ */
+export function getCounterDocIdForPrefix(prefix: string): string {
+  const p = (prefix || "").toUpperCase();
+  if (p === "RM-A") return "memberSequence_orange";
+  if (p === "RM-B") return "memberSequence_blue";
+  if (p === "RM-E") return "employeeSequence";
+  return "memberSequence_green"; // Default Green Tier ("RM-C")
+}
+
+/**
+ * Queries Firestore to inspect the last generated ID card in the database for a specific tier/prefix
+ * and finds the highest sequence number currently registered for that tier.
  * Checks across:
- * 1. `idCards` collection (checks document IDs and `employeeId` fields)
- * 2. `members` collection (checks `employeeId` fields)
- * 3. `counters/memberSequence`
+ * 1. Tier-specific counter: `counters/{counterDocId}` (e.g., `memberSequence_green`, `memberSequence_blue`, `memberSequence_orange`)
+ * 2. Prefix-named counter fallback: `counters/memberSequence_{prefix}`
+ * 3. `idCards` collection (checks document IDs and `employeeId` fields matching this prefix)
+ * 4. `members` collection (checks `employeeId` fields matching this prefix)
  */
 export async function getLastGeneratedSequenceFromDatabase(
   targetPrefix?: string,
   firestore: Firestore = db
 ): Promise<number> {
+  const prefix = (targetPrefix || "RM-C").toUpperCase();
+  const counterDocId = getCounterDocIdForPrefix(prefix);
   let highest = 1110;
 
+  // 1. Inspect tier-specific counter in `counters` collection (Public get allowed)
   try {
-    // 1. Inspect all records in `idCards` collection
-    const idCardsSnap = await getDocs(collection(firestore, "idCards"));
-    idCardsSnap.forEach((docSnap) => {
-      const data = docSnap.data();
-      const idsToCheck = [docSnap.id, data.employeeId, data.id].filter(Boolean);
-      for (const idStr of idsToCheck) {
-        if (typeof idStr === "string") {
-          // Extract numeric suffix from patterns like RM-C-1111 or raw numbers
-          const match = targetPrefix
-            ? idStr.match(new RegExp(`^${targetPrefix}-(\\d+)`, "i"))
-            : idStr.match(/RM-[A-C]-(\d+)/i) || idStr.match(/(\d{4,})$/);
-          if (match && match[1]) {
-            const num = parseInt(match[1], 10);
-            if (!isNaN(num) && num > highest) {
-              highest = num;
-            }
-          }
-        }
-      }
-    });
-  } catch (err) {
-    console.warn("Could not inspect idCards collection for sequence:", err);
-  }
-
-  try {
-    // 2. Inspect all records in `members` collection
-    const membersSnap = await getDocs(collection(firestore, "members"));
-    membersSnap.forEach((docSnap) => {
-      const data = docSnap.data();
-      const idsToCheck = [data.employeeId, data.memberId].filter(Boolean);
-      for (const idStr of idsToCheck) {
-        if (typeof idStr === "string") {
-          const match = targetPrefix
-            ? idStr.match(new RegExp(`^${targetPrefix}-(\\d+)`, "i"))
-            : idStr.match(/RM-[A-C]-(\d+)/i) || idStr.match(/(\d{4,})$/);
-          if (match && match[1]) {
-            const num = parseInt(match[1], 10);
-            if (!isNaN(num) && num > highest) {
-              highest = num;
-            }
-          }
-        }
-      }
-    });
-  } catch (err) {
-    console.warn("Could not inspect members collection for sequence:", err);
-  }
-
-  try {
-    // 3. Inspect global and prefix-specific counters in `counters`
-    const counterSnap = await getDoc(doc(firestore, "counters", "memberSequence"));
+    const counterSnap = await getDoc(doc(firestore, "counters", counterDocId));
     if (counterSnap.exists()) {
       const data = counterSnap.data();
       const seq = typeof data.currentSequence === "number" ? data.currentSequence : 0;
@@ -544,13 +577,162 @@ export async function getLastGeneratedSequenceFromDatabase(
         highest = seq;
       }
     }
-  } catch (err) {
-    console.warn("Could not inspect counters document:", err);
+  } catch {
+    // Ignore read errors
   }
 
-  // 4. Keep client localStorage in sync with authoritative database sequence
+  // Check prefix-named counter document (e.g., counters/memberSequence_RM-A) if different
+  const prefixCounterId = `memberSequence_${prefix}`;
+  if (prefixCounterId !== counterDocId) {
+    try {
+      const pSnap = await getDoc(doc(firestore, "counters", prefixCounterId));
+      if (pSnap.exists()) {
+        const data = pSnap.data();
+        const seq = typeof data.currentSequence === "number" ? data.currentSequence : 0;
+        if (seq > highest) {
+          highest = seq;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // Legacy fallback: for RM-A (orange), check the old global `memberSequence` if it was tracking RM-A
+  if (prefix === "RM-A" && highest <= 1110) {
+    try {
+      const legacySnap = await getDoc(doc(firestore, "counters", "memberSequence"));
+      if (legacySnap.exists()) {
+        const data = legacySnap.data();
+        if (data.lastPrefix === "RM-A" || !data.lastPrefix) {
+          const seq = typeof data.currentSequence === "number" ? data.currentSequence : 0;
+          if (seq > highest) {
+            highest = seq;
+          }
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // If authoritative counter is established (> 1110), return immediately.
+  // Avoids unauthorized bulk collection queries for non-admin browser users.
+  if (highest > 1110) {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem(`rm_member_seq_${prefix.toLowerCase()}`, highest.toString());
+      } catch {
+        // Ignore storage errors
+      }
+    }
+    return highest;
+  }
+
+  // 2. If no counter document exists yet, try checking if 1111 exists via single getDoc (publicly allowed)
+  try {
+    const firstCard = await getDoc(doc(firestore, "idCards", `${prefix}-1111`));
+    if (!firstCard.exists()) {
+      // No card sequence has been started for this prefix yet; start at 1110 (next will be 1111)
+      return 1110;
+    }
+  } catch {
+    // Fall through to bulk check if admin
+  }
+
+  // 3. Fallback for admin sessions: inspect idCards collection for existing records
+  try {
+    const idCardsSnap = await getDocs(collection(firestore, "idCards"));
+    let foundFirstInSequence = false;
+    let maxFoundForPrefix = 1110;
+
+    idCardsSnap.forEach((docSnap) => {
+      const data = docSnap.data();
+      const idsToCheck = [docSnap.id, data.employeeId, data.id].filter(Boolean);
+      for (const idStr of idsToCheck) {
+        if (typeof idStr === "string") {
+          const match = idStr.match(new RegExp(`^${prefix}-(\\d+)`, "i"));
+          if (match && match[1]) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num)) {
+              if (num === 1111) {
+                foundFirstInSequence = true;
+              }
+              if (num > maxFoundForPrefix) {
+                maxFoundForPrefix = num;
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (foundFirstInSequence || highest > 1110) {
+      if (maxFoundForPrefix > highest) {
+        highest = maxFoundForPrefix;
+      }
+    }
+  } catch {
+    // Non-admin clients do not have bulk list permissions; catch silently
+  }
+
+  // 4. Fallback for admin sessions: inspect members collection for existing records
+  if (highest <= 1110) {
+    try {
+      const membersSnap = await getDocs(collection(firestore, "members"));
+      let foundFirstInSequence = false;
+      let maxFoundForPrefix = 1110;
+
+      membersSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        const idsToCheck = [data.employeeId, data.memberId].filter(Boolean);
+        for (const idStr of idsToCheck) {
+          if (typeof idStr === "string") {
+            const match = idStr.match(new RegExp(`^${prefix}-(\\d+)`, "i"));
+            if (match && match[1]) {
+              const num = parseInt(match[1], 10);
+              if (!isNaN(num)) {
+                if (num === 1111) {
+                  foundFirstInSequence = true;
+                }
+                if (num > maxFoundForPrefix) {
+                  maxFoundForPrefix = num;
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (foundFirstInSequence || highest > 1110) {
+        if (maxFoundForPrefix > highest) {
+          highest = maxFoundForPrefix;
+        }
+      }
+    } catch {
+      // Non-admin clients do not have bulk list permissions; catch silently
+    }
+  }
+
+  // 5. Client localStorage fallback
+  if (highest <= 1110 && typeof window !== "undefined") {
+    try {
+      const cached = localStorage.getItem(`rm_member_seq_${prefix.toLowerCase()}`);
+      if (cached) {
+        const num = parseInt(cached, 10);
+        if (!isNaN(num) && num > highest) {
+          highest = num;
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+
+  // 6. Keep client localStorage in sync with authoritative database sequence for this prefix
   if (typeof window !== "undefined") {
     try {
+      localStorage.setItem(`rm_member_seq_${prefix.toLowerCase()}`, highest.toString());
       localStorage.setItem("rm_member_seq", highest.toString());
     } catch {
       // Ignore storage errors
@@ -561,23 +743,25 @@ export async function getLastGeneratedSequenceFromDatabase(
 }
 
 /**
- * Generates the next sequential employee ID for a new ID card.
- * Queries the database for the last generated ID, increments the sequence,
+ * Generates the next sequential employee ID for a new ID card for the given tier.
+ * Uses a separate counter for each tier (Green, Blue, Orange).
+ * Queries the database for the last generated ID for this tier, increments the sequence,
  * verifies that the candidate ID does not exist in `idCards` or `members`,
- * updates the counter atomically, and returns the unique ID.
+ * updates the tier's counter atomically, and returns the unique ID.
  */
 export async function getNextEmployeeId(
   tier: "green" | "blue" | "orange" | "red" | string,
   firestore: Firestore = db
 ): Promise<string> {
   const prefix = getPrefixForTier(tier);
-  const counterRef = doc(firestore, "counters", "memberSequence");
+  const counterDocId = getCounterDocIdForTier(tier);
+  const counterRef = doc(firestore, "counters", counterDocId);
 
   try {
-    // 1. Query Firestore database for highest existing sequence
+    // 1. Query Firestore database for highest existing sequence for this specific tier
     const highestInDb = await getLastGeneratedSequenceFromDatabase(prefix, firestore);
 
-    // 2. Atomically update counter in Firestore
+    // 2. Atomically update the tier's counter in Firestore
     const nextSeq = await runTransaction(firestore, async (transaction) => {
       const counterSnap = await transaction.get(counterRef);
       let current = highestInDb;
@@ -627,6 +811,7 @@ export async function getNextEmployeeId(
           {
             currentSequence: candidateSeq,
             lastEmployeeId: candidateId,
+            lastPrefix: prefix,
             updatedAt: serverTimestamp(),
           },
           { merge: true }
@@ -637,6 +822,7 @@ export async function getNextEmployeeId(
     }
 
     if (typeof window !== "undefined") {
+      localStorage.setItem(`rm_member_seq_${prefix.toLowerCase()}`, candidateSeq.toString());
       localStorage.setItem("rm_member_seq", candidateSeq.toString());
     }
 
@@ -646,28 +832,31 @@ export async function getNextEmployeeId(
     const fallbackBase = await getLastGeneratedSequenceFromDatabase(prefix, firestore).catch(() => 1110);
     const fallbackSeq = fallbackBase + 1;
     if (typeof window !== "undefined") {
-      localStorage.setItem("rm_member_seq", fallbackSeq.toString());
+      localStorage.setItem(`rm_member_seq_${prefix.toLowerCase()}`, fallbackSeq.toString());
     }
     return `${prefix}-${fallbackSeq}`;
   }
 }
 
 /**
- * Previews the next sequential employee ID without consuming/incrementing the counter.
- * Inspects existing database records to predict the next ID to be assigned.
+ * Previews the next sequential employee ID for a tier without consuming/incrementing the counter.
+ * Inspects existing database records for this tier to predict the next ID to be assigned.
  */
-export async function peekNextEmployeeId(tier: "green" | "blue" | "orange" | "red" | string): Promise<string> {
+export async function peekNextEmployeeId(
+  tier: "green" | "blue" | "orange" | "red" | string,
+  firestore: Firestore = db
+): Promise<string> {
   const prefix = getPrefixForTier(tier);
 
   try {
-    const highestInDb = await getLastGeneratedSequenceFromDatabase(prefix);
+    const highestInDb = await getLastGeneratedSequenceFromDatabase(prefix, firestore);
     let candidateSeq = highestInDb + 1;
     let candidateId = `${prefix}-${candidateSeq}`;
 
     // Verify candidate ID doesn't already exist
     let attempts = 0;
     while (attempts < 50) {
-      const snap = await getDoc(doc(db, "idCards", candidateId));
+      const snap = await getDoc(doc(firestore, "idCards", candidateId));
       if (!snap.exists()) {
         break;
       }
@@ -681,6 +870,25 @@ export async function peekNextEmployeeId(tier: "green" | "blue" | "orange" | "re
     console.warn("peekNextEmployeeId fallback:", err);
     return `${prefix}-1111`;
   }
+}
+
+/**
+ * Diagnostic helper: returns the status and next sequential ID for all tiers.
+ */
+export async function getAllTierCounters(firestore: Firestore = db) {
+  const [greenId, blueId, orangeId, employeeId] = await Promise.all([
+    peekNextEmployeeId("green", firestore),
+    peekNextEmployeeId("blue", firestore),
+    peekNextEmployeeId("orange", firestore),
+    peekNextEmployeeStaffId(firestore),
+  ]);
+
+  return {
+    green: { tier: "green", prefix: "RM-C", counterDoc: "memberSequence_green", nextId: greenId },
+    blue: { tier: "blue", prefix: "RM-B", counterDoc: "memberSequence_blue", nextId: blueId },
+    orange: { tier: "orange", prefix: "RM-A", counterDoc: "memberSequence_orange", nextId: orangeId },
+    employee: { tier: "employee", prefix: "RM-E", counterDoc: "employeeSequence", nextId: employeeId },
+  };
 }
 
 // ----------------------------------------------------

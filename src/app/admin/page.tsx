@@ -35,6 +35,8 @@ import {
   getAllPropertiesAdmin,
   deletePropertyListing,
   updatePropertyListing,
+  getAllTierCounters,
+  deleteIdCardRecord,
 } from "@/lib/firebase/db";
 import { PropertyUploadForm } from "@/components/dashboard/PropertyUploadForm";
 import { PropertyDetailsModal } from "@/components/properties/PropertyDetailsModal";
@@ -134,7 +136,7 @@ function AdminSignIn({ onSignedIn }: { onSignedIn: () => void }) {
 }
 
 type Tab = "memberCards" | "employeeCards" | "properties";
-type DetailRecord = { title: string; photo?: string; data: Record<string, unknown> };
+type DetailRecord = { id?: string; title: string; photo?: string; data: Record<string, unknown> };
 
 function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [cards, setCards] = useState<IdCardRecordData[]>([]);
@@ -143,23 +145,32 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   const [showPropertyUpload, setShowPropertyUpload] = useState(false);
   const [selectedPropertyModal, setSelectedPropertyModal] = useState<PropertyListingData | null>(null);
   const [deletingPropId, setDeletingPropId] = useState<string | null>(null);
+  const [deletingCardId, setDeletingCardId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("memberCards");
   const [search, setSearch] = useState("");
   const [detail, setDetail] = useState<DetailRecord | null>(null);
+  const [tierCounters, setTierCounters] = useState<{
+    green?: { nextId: string };
+    blue?: { nextId: string };
+    orange?: { nextId: string };
+    employee?: { nextId: string };
+  } | null>(null);
 
   const load = useCallback(async () => {
     const { db } = getAdminFirebase();
     try {
-      const [c, i, p] = await Promise.all([
+      const [c, i, p, counters] = await Promise.all([
         listAllIdCards(db),
         listIssuers(db),
         getAllPropertiesAdmin(db),
+        getAllTierCounters(db).catch(() => null),
       ]);
       setCards(c);
       setIssuers(i);
       setProperties(p);
+      if (counters) setTierCounters(counters);
       setLoadError(null);
     } catch (err) {
       console.error("Admin dashboard load error:", err);
@@ -172,11 +183,17 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
   useEffect(() => {
     // Initial load; state is only set from the async callback
     const { db } = getAdminFirebase();
-    Promise.all([listAllIdCards(db), listIssuers(db), getAllPropertiesAdmin(db)])
-      .then(([c, i, p]) => {
+    Promise.all([
+      listAllIdCards(db),
+      listIssuers(db),
+      getAllPropertiesAdmin(db),
+      getAllTierCounters(db).catch(() => null),
+    ])
+      .then(([c, i, p, counters]) => {
         setCards(c);
         setIssuers(i);
         setProperties(p);
+        if (counters) setTierCounters(counters);
       })
       .catch((err) => {
         console.error("Admin dashboard load error:", err);
@@ -212,6 +229,22 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
       alert("Failed to delete property. Check network and rules.");
     } finally {
       setDeletingPropId(null);
+    }
+  };
+
+  const handleDeleteCard = async (cardId: string) => {
+    if (!confirm(`Are you sure you want to permanently delete ID card "${cardId}" from the database?`)) return;
+    setDeletingCardId(cardId);
+    try {
+      const { db } = getAdminFirebase();
+      await deleteIdCardRecord(cardId, db);
+      setCards((prev) => prev.filter((c) => c.employeeId !== cardId));
+      setDetail(null);
+    } catch (err) {
+      console.error("Error deleting ID card:", err);
+      alert("Failed to delete ID card record. Check network and rules.");
+    } finally {
+      setDeletingCardId(null);
     }
   };
 
@@ -272,6 +305,74 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
         <StatTile icon={<FaUserTie />} label="Employee Cards" value={employeeCards.length} loading={loading} />
         <div onClick={() => setTab("properties")} className="cursor-pointer">
           <StatTile icon={<FaBuilding />} label="Portal Properties" value={properties.length} loading={loading} />
+        </div>
+      </div>
+
+      {/* Tier Counters Monitor */}
+      <div className="bg-white rounded-xl border border-[#CBD5E1] p-3.5 shadow-xs">
+        <div className="flex items-center justify-between mb-2.5 pb-2 border-b border-[#F1F5F9]">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <h3 className="text-[12px] font-black uppercase text-[#073F73] tracking-wide">
+              Live ID Card Counters & Sequences
+            </h3>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+            Separate Counters Active
+          </span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/40">
+            <div className="text-[10px] font-bold text-emerald-700 uppercase flex items-center justify-between">
+              <span>Green Card</span>
+              <span className="font-mono text-[9px] bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded font-black">RM-C</span>
+            </div>
+            <div className="mt-1 font-mono font-black text-[13px] text-emerald-900">
+              {tierCounters?.green?.nextId || "RM-C-1111"}
+            </div>
+            <div className="text-[9.5px] text-gray-500 font-medium">
+              Next ID · {cards.filter((c) => c.employeeId?.startsWith("RM-C") || c.cardTier === "green").length} issued
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-lg border border-sky-200 bg-sky-50/40">
+            <div className="text-[10px] font-bold text-sky-700 uppercase flex items-center justify-between">
+              <span>Blue Card</span>
+              <span className="font-mono text-[9px] bg-sky-100 text-sky-800 px-1.5 py-0.2 rounded font-black">RM-B</span>
+            </div>
+            <div className="mt-1 font-mono font-black text-[13px] text-sky-900">
+              {tierCounters?.blue?.nextId || "RM-B-1111"}
+            </div>
+            <div className="text-[9.5px] text-gray-500 font-medium">
+              Next ID · {cards.filter((c) => c.employeeId?.startsWith("RM-B") || c.cardTier === "blue").length} issued
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-lg border border-orange-200 bg-orange-50/40">
+            <div className="text-[10px] font-bold text-orange-700 uppercase flex items-center justify-between">
+              <span>Orange Card</span>
+              <span className="font-mono text-[9px] bg-orange-100 text-orange-800 px-1.5 py-0.2 rounded font-black">RM-A</span>
+            </div>
+            <div className="mt-1 font-mono font-black text-[13px] text-orange-900">
+              {tierCounters?.orange?.nextId || "RM-A-1111"}
+            </div>
+            <div className="text-[9.5px] text-gray-500 font-medium">
+              Next ID · {cards.filter((c) => c.employeeId?.startsWith("RM-A") || c.cardTier === "orange" || c.cardTier === "red").length} issued
+            </div>
+          </div>
+
+          <div className="p-2.5 rounded-lg border border-purple-200 bg-purple-50/40">
+            <div className="text-[10px] font-bold text-purple-700 uppercase flex items-center justify-between">
+              <span>Staff Employee</span>
+              <span className="font-mono text-[9px] bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded font-black">RM-E</span>
+            </div>
+            <div className="mt-1 font-mono font-black text-[13px] text-purple-900">
+              {tierCounters?.employee?.nextId || "RM-E-1111"}
+            </div>
+            <div className="text-[9.5px] text-gray-500 font-medium">
+              Next ID · {employeeCards.length} issued
+            </div>
+          </div>
         </div>
       </div>
 
@@ -469,7 +570,14 @@ function AdminDashboard({ onSignOut }: { onSignOut: () => void }) {
         )}
       </div>
 
-      {detail && <DetailsDialog record={detail} onClose={() => setDetail(null)} />}
+      {detail && (
+        <DetailsDialog
+          record={detail}
+          onClose={() => setDetail(null)}
+          onDelete={handleDeleteCard}
+          isDeleting={deletingCardId === detail.id}
+        />
+      )}
 
       {selectedPropertyModal && (
         <PropertyDetailsModal
@@ -686,6 +794,7 @@ function VerifyLink({ id }: { id: string }) {
 }
 
 const cardDetail = (c: IdCardRecordData): DetailRecord => ({
+  id: c.employeeId,
   title: `${c.fullName || c.name} — ${c.employeeId}`,
   photo: c.photoUrl || c.photo,
   data: c as unknown as Record<string, unknown>,
@@ -775,7 +884,17 @@ function formatValue(value: unknown): string {
 const labelFor = (key: string) =>
   FIELD_LABELS[key] || key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
 
-function DetailsDialog({ record, onClose }: { record: DetailRecord; onClose: () => void }) {
+function DetailsDialog({
+  record,
+  onClose,
+  onDelete,
+  isDeleting,
+}: {
+  record: DetailRecord;
+  onClose: () => void;
+  onDelete?: (id: string) => void;
+  isDeleting?: boolean;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -809,6 +928,28 @@ function DetailsDialog({ record, onClose }: { record: DetailRecord; onClose: () 
               </div>
             ))}
           </dl>
+        </div>
+        <div className="p-3 bg-[#F8FAFC] border-t border-[#E2E8F0] flex items-center justify-between">
+          {record.id && onDelete ? (
+            <button
+              type="button"
+              disabled={isDeleting}
+              onClick={() => onDelete(record.id!)}
+              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded text-[11px] font-bold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 transition-colors"
+            >
+              <FaTrash className="text-[10px]" />
+              <span>{isDeleting ? "Deleting..." : "Delete ID Card"}</span>
+            </button>
+          ) : (
+            <div />
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-3.5 py-1.5 bg-white border border-[#CBD5E1] hover:bg-gray-50 text-[#073F73] text-[11px] font-bold rounded cursor-pointer"
+          >
+            Close
+          </button>
         </div>
       </div>
     </div>

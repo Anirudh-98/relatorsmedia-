@@ -200,7 +200,14 @@ service cloud.firestore {
       function isValidCounterWrite() {
         let d = request.resource.data;
         return isAuthenticated()
-          && (counterId == 'memberSequence' || (counterId == 'employeeSequence' && isStaff()))
+          && (
+            counterId == 'memberSequence'
+            || counterId == 'memberSequence_green'
+            || counterId == 'memberSequence_blue'
+            || counterId == 'memberSequence_orange'
+            || counterId.matches('^memberSequence_.*')
+            || (counterId == 'employeeSequence' && isStaff())
+          )
           && d.currentSequence is int
           && d.currentSequence > 1110
           && d.currentSequence < 100000000;

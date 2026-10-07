@@ -1204,7 +1204,9 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
 
                 <div className="flex flex-col justify-end">
                   <span className="text-[9.5px] text-[#64748B] font-medium leading-tight">
-                    Unique Member ID linked to your chosen card tier & verification QR code.
+                    {selectedTier === "green"
+                      ? "Unique Free Member ID linked to your verified realtor portal registration."
+                      : "Unique Member ID linked to your chosen card tier & verification QR code."}
                   </span>
                 </div>
               </div>
@@ -1314,16 +1316,18 @@ export const IdCardModal: React.FC<IdCardModalProps> = ({
                 />
               </div>
 
-              {/* QR Verification details pill */}
-              <div className="w-full mt-3 p-2 bg-[#F8FAFC] rounded-md border border-[#E2E8F0] flex items-center justify-between text-[9.5px]">
-                <div className="flex items-center gap-1.5 text-[#334155] font-bold">
-                  <FaQrcode className="text-[#0284C7] text-[12px]" />
-                  <span>QR Verifies:</span>
+              {/* QR Verification details pill (hidden for free green tier) */}
+              {selectedTier !== "green" && (
+                <div className="w-full mt-3 p-2 bg-[#F8FAFC] rounded-md border border-[#E2E8F0] flex items-center justify-between text-[9.5px]">
+                  <div className="flex items-center gap-1.5 text-[#334155] font-bold">
+                    <FaQrcode className="text-[#0284C7] text-[12px]" />
+                    <span>QR Verifies:</span>
+                  </div>
+                  <span className="font-mono text-[#073F73] font-extrabold truncate max-w-[150px]">
+                    {previewEmployee.employeeId}
+                  </span>
                 </div>
-                <span className="font-mono text-[#073F73] font-extrabold truncate max-w-[150px]">
-                  {previewEmployee.employeeId}
-                </span>
-              </div>
+              )}
 
               {/* Download & Print Action Buttons */}
               <div className="w-full grid grid-cols-2 gap-2 mt-3">
